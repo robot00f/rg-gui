@@ -67,6 +67,9 @@ namespace rg_gui
         private const int DEFAULT_MAXLINEHIGHLIGHTS = 100;
         private int m_maxLineHighlights = DEFAULT_MAXLINEHIGHLIGHTS;
 
+        private string m_fileViewerPath;
+        private string m_fileViewerArgs;
+
         public class FileSearchResult
         {
             public string Path { get; }
@@ -100,7 +103,7 @@ namespace rg_gui
         public RangeObservableCollection<FileSearchResult> FileResultItems { get; } = new();
         public RangeObservableCollection<ResultLine> ResultLineItems { get; } = new();
 
-        public MainWindow()
+        public MainWindow(string? basePath, string? includeFiles, string? excludeFiles, string? containingText)
         {
             InitializeComponent();
 
@@ -111,10 +114,10 @@ namespace rg_gui
             Height = double.TryParse(config.AppSettings.Settings["MainWindowHeight"]?.Value, out var height) ? height : DEFAULT_MAINWINDOW_HEIGHT;
             WindowState = int.TryParse(config.AppSettings.Settings["MainWindowState"]?.Value, out var windowState) ? WindowState : DEFAULT_MAINWINDOW_STATE;
 
-            txtBasePath.Text = config.AppSettings.Settings["BasePath"]?.Value ?? DEFAULT_BASEPATH;
-            txtIncludeFiles.Text = config.AppSettings.Settings["IncludeFiles"]?.Value ?? DEFAULT_INCLUDEFILES;
-            txtExcludeFiles.Text = config.AppSettings.Settings["ExcludeFiles"]?.Value ?? DEFAULT_EXCLUDEFILES;
-            txtContainingText.Text = config.AppSettings.Settings["ContainingText"]?.Value ?? DEFAULT_CONTAININGTEXT;
+            txtBasePath.Text = basePath ?? config.AppSettings.Settings["BasePath"]?.Value ?? DEFAULT_BASEPATH;
+            txtIncludeFiles.Text = includeFiles ?? config.AppSettings.Settings["IncludeFiles"]?.Value ?? DEFAULT_INCLUDEFILES;
+            txtExcludeFiles.Text = excludeFiles ?? config.AppSettings.Settings["ExcludeFiles"]?.Value ?? DEFAULT_EXCLUDEFILES;
+            txtContainingText.Text = containingText ?? config.AppSettings.Settings["ContainingText"]?.Value ?? DEFAULT_CONTAININGTEXT;
             chkCaseSensitive.IsChecked = bool.TryParse(config.AppSettings.Settings["CaseSensitive"]?.Value, out var caseSensitive) ? caseSensitive : DEFAULT_CASESENSITIVE;
             chkRecursive.IsChecked = bool.TryParse(config.AppSettings.Settings["Recursive"]?.Value, out var recursive) ? recursive : DEFAULT_RECURSIVE;
 
@@ -179,6 +182,9 @@ namespace rg_gui
 
             m_ripGrepWrapper = new RipGrepWrapper(ripgrepPath);
             m_ripGrepWrapper.FileFound += OnFileAdded;
+
+            m_fileViewerPath = config.AppSettings.Settings["FileViewerPath"]?.Value ?? string.Empty;
+            m_fileViewerArgs = config.AppSettings.Settings["FileViewerArgs"]?.Value ?? string.Empty;
         }
 
         private static void SetConfigValue(Configuration config, string key, string value)
@@ -238,6 +244,9 @@ namespace rg_gui
             SetConfigValue(config, "Theme", m_currentTheme.ToString());
             SetConfigValue(config, "MultipleHighlightColors", m_multipleHighlightColors.ToString());
             SetConfigValue(config, "MaxLineHighlights", m_maxLineHighlights.ToString());
+
+            SetConfigValue(config, "FileViewerPath", m_fileViewerPath);
+            SetConfigValue(config, "FileViewerArgs", m_fileViewerArgs);
 
             config.Save();
 
@@ -304,9 +313,36 @@ namespace rg_gui
             }
         }
 
+        private void grid_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.F3)
+            {
+                return;
+            }
+
+            OpenFileViewer();
+        }
+
+        private void grid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is DataGridRow row)
+            {
+                row.IsSelected = true;
+                row.Focus();
+            }
+        }
+
         private void grid_RequestBringIntoViewHandler(object sender, RequestBringIntoViewEventArgs e)
         {
             e.Handled = true;
+        }
+
+        private void gridResultLines_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            if (string.IsNullOrEmpty(m_fileViewerPath) || string.IsNullOrEmpty(m_fileViewerArgs))
+            {
+                e.Handled = true;
+            }
         }
 
         private static ScrollViewer? GetScrollViewer(UIElement? element)
@@ -447,7 +483,9 @@ namespace rg_gui
                 Theme = m_currentTheme.GetName(),
                 MaxSearchTerms = m_maxSearchTerms,
                 Multicolor = m_multipleHighlightColors,
-                MaxLineHighlights = m_maxLineHighlights
+                MaxLineHighlights = m_maxLineHighlights,
+                FileViewerPath = m_fileViewerPath,
+                FileViewerArgs = m_fileViewerArgs
             };
 
             if (settingsWindow.ShowDialog() == true)
@@ -457,6 +495,8 @@ namespace rg_gui
                 m_maxSearchTerms = settingsWindow.MaxSearchTerms;
                 m_multipleHighlightColors = settingsWindow.Multicolor;
                 m_maxLineHighlights = settingsWindow.MaxLineHighlights;
+                m_fileViewerPath = settingsWindow.FileViewerPath;
+                m_fileViewerArgs = settingsWindow.FileViewerArgs;
             }
         }
 
@@ -514,6 +554,11 @@ namespace rg_gui
         private void cmbFileSizeUnit_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             txtMaxFileSize.IsEnabled = (cmbFileSizeUnit.SelectedIndex != 0);
+        }
+
+        private void openInFileViewer_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileViewer();
         }
 
         private string GetColorizedString(string source, IEnumerable<TermResult> termResults)
@@ -580,6 +625,41 @@ namespace rg_gui
         private static string EscapeString(string source)
         {
             return source.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        }
+
+        private void OpenFileViewer()
+        {
+            if (gridFileResults.SelectedItems.Count <= 0 || gridResultLines.SelectedItems.Count <= 0)
+            {
+                return;
+            }
+
+            var resultFile = gridFileResults.SelectedItems[gridFileResults.SelectedItems.Count - 1] as FileSearchResult;
+            var resultLine = gridResultLines.SelectedItems[gridResultLines.SelectedItems.Count - 1] as ResultLine;
+            if (resultFile == null || resultLine == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(m_fileViewerPath) && File.Exists(m_fileViewerPath) && !string.IsNullOrEmpty(m_fileViewerArgs) && m_fileViewerArgs.Contains("$FILE"))
+            {
+                var args = m_fileViewerArgs
+                    .Replace("$FILE", $"\"{Path.Combine(resultFile.Path, resultFile.Filename)}\"")
+                    .Replace("$LINE", resultLine.Line.ToString());
+
+                var processStartInfo = new ProcessStartInfo()
+                {
+                    FileName = m_fileViewerPath,
+                    Arguments = args,
+                    UseShellExecute = false
+                };
+
+                using var process = new Process()
+                {
+                    StartInfo = processStartInfo
+                };
+                process.Start();
+            }
         }
     }
 }
