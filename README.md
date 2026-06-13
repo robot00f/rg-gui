@@ -19,7 +19,36 @@ Select a folder using the Browse button or by typing the path into the "In Folde
 
 Include Files and Exclude Files can be path or file names and can include wildcards.  Multiple names can be specified, separated by commas, semicolons, or spaces.
 
+Folders can be added to the include/exclude list.  For example, excluding `\.git;\bin;\obj;*.exe;*.dll` will ignore any files in a subfolder named .git, bin, or obj, as well as any files with a .exe or .dll extension.
+
 Finally, type the text you would like to search for in the "Containing Text" box.  Press the Start button to start your search.
+
+### File results
+
+The left box displays a list of files containing matches.  If you click one of these results, the matching lines within that file will displayed in the right box.  You can right-click the filename to open the Windows context menu options (Open with, Edit, etc.)
+
+### Line results
+
+The right box displays a list of matching lines from the selected file.  You can select text from the "content" column by clicking/dragging over it; you can then use CTRL+C to copy it to the Windows clipboard.
+
+If you have configured the file viewer path and arguments in the Settings window, you can right-click a line to open the file at that line in the viewer; you can also press the F3 key after clicking a line.
+
+## Command Line Arguments
+
+When you run rg-gui.exe, you can optionally use any of the following arguments to set a value:
+
+| Long form       | Short form | Sets the following value |
+| --------------- | ---------- | ------------------------ |
+| --folder        | -f         | "In Folder"              |
+| --include-files | -i         | "Include Files"          |
+| --exclude-files | -e         | "Exclude Files"          |
+| --text          | -t         | "Containing Text"        |
+
+Examples in long and short form:
+
+ `rg-gui.exe --folder "C:\git-projects\SQLiteCpp" --include-files "*.h" --exclude-files "\.git;\node_modules;\googletest" --text "tryExec"`
+
+ `rg-gui.exe -f "C:\git-projects\SQLiteCpp" -i "*.h" -e "\.git;\node_modules;\googletest" -t "tryExec"`
 
 ## Settings
 
@@ -34,6 +63,28 @@ Maximum number of terms (a word or quoted string) which can be typed in the "Con
 ### Multi-color Highlighting
 
 If a search contains multiple terms, the results for each term can be highlighted in a separate color (up to 4 colors).  If this is disabled, results for all terms will be highlighted using the same color.
+
+### Max highlights per line
+
+Maximum number of terms (a word or quoted string) which can be highlighted in the line results box.  This prevents possible slowdowns when viewing results in a large file containing only one line.
+
+### File Viewer
+
+This can be used to allow a file to be opened directly to a line containing a result.  Both the "Executable path" and "Arguments" options must be set, or this will be disabled.
+
+#### Executable Path
+
+Full path to the program which will be used to view the file.  For example, `C:\Program Files\Notepad++\Notepad++.exe`
+
+#### Arguments
+
+Command-line arguments which should be used when invoking the file viewer.  The specific values needed here depend on which viewer program you are using.
+
+The arguements must contain `$FILE` as a placeholder for the full path to the file to be opened.  `$LINE` may also be used as a placeholder for the line number.
+
+When filling in the `$FILE` placeholder, the file path will automatically be surrounded with double-quotes.
+
+For Notepad++, set the arguments to: `-n$LINE $FILE`
 
 ## Credits
 

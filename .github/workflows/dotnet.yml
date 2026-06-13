@@ -45,7 +45,7 @@ jobs:
 
     - name: Compress files
       run: |-
-        powershell Compress-Archive ${{ github.workspace }}\publish\*.exe,${{ github.workspace }}\publish\*.config,${{ github.workspace }}\depends\ripgrep\rg.exe ${{ github.workspace }}\rg-gui-${{ github.ref_name }}.zip
+        powershell Compress-Archive ${{ github.workspace }}\README.md,${{ github.workspace }}\LICENSE,${{ github.workspace }}\publish\*.exe,${{ github.workspace }}\publish\*.config,${{ github.workspace }}\depends\ripgrep\rg.exe ${{ github.workspace }}\rg-gui-${{ github.ref_name }}.zip
 
     - name: Release
       uses: softprops/action-gh-release@v1

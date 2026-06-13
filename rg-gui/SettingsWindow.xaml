@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:rg_gui"
         mc:Ignorable="d"
         WindowStartupLocation="CenterOwner"
-        Title="Settings" Height="150" Width="250"
+        Title="Settings" Height="290" Width="630"
         Style="{StaticResource CustomWindowStyle}"
         ResizeMode="NoResize">
     <Grid>
@@ -22,24 +22,45 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <Label Grid.Row="0" Grid.Column="0" Margin="0,0,5,5" Content="Theme" VerticalContentAlignment="Center"/>
-            <ComboBox Grid.Row="0" Grid.Column="1" Margin="5,0,0,5" x:Name="cmbTheme" VerticalAlignment="Center" SelectedValue="{Binding Path=Theme}" SelectedValuePath="Content">
+            <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,0,5,5" x:Name="cmbTheme" VerticalAlignment="Center" SelectedValue="{Binding Path=Theme}" SelectedValuePath="Content">
                 <ComboBoxItem x:Name="Light" Content="Light"/>
                 <ComboBoxItem x:Name="Dark" Content="Dark"/>
             </ComboBox>
 
             <Label Grid.Row="1" Grid.Column="0" Margin="0,0,5,5" Content="Maximum search terms" VerticalContentAlignment="Center"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Margin="5,0,0,5" x:Name="txtMaxTerms" VerticalAlignment="Center" Text="{Binding Path=MaxSearchTerms, Mode=TwoWay}" TextChanged="txtMaxTerms_TextChanged"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,0,5,5" x:Name="txtMaxTerms" VerticalAlignment="Center" Text="{Binding Path=MaxSearchTerms, Mode=TwoWay}" TextChanged="txtMaxTerms_TextChanged"/>
 
             <Label Grid.Row="2" Grid.Column="0" Margin="0,0,5,5" Content="Multi-color highlighting" VerticalContentAlignment="Center"/>
-            <CheckBox Grid.Row="2" Grid.Column="1" Margin="5,0,0,5" x:Name="chkMulticolor" VerticalContentAlignment="Center" IsChecked="{Binding Path=Multicolor, Mode=TwoWay}"/>
+            <CheckBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,0,5,5" x:Name="chkMulticolor" VerticalContentAlignment="Center" IsChecked="{Binding Path=Multicolor, Mode=TwoWay}"/>
+
+            <Label Grid.Row="3" Grid.Column="0" Margin="0,0,5,5" Content="Max highlights per line" VerticalContentAlignment="Center"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,0,5,5" x:Name="txtMaxLineHighlights" VerticalAlignment="Center" Text="{Binding Path=MaxLineHighlights, Mode=TwoWay}" TextChanged="txtMaxLineHighlights_TextChanged"/>
+
+            <Label Grid.Row="4" Grid.Column="0" Margin="0,10,5,0" Content="File Viewer"/>
+            <Label Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,10,5,0" Content="If either option is empty, viewer will be disabled."/>
+
+            <Label Grid.Row="5" Grid.Column="0" Margin="20,0,5,0" Content="Executable path" VerticalContentAlignment="Center"/>
+            <TextBox Grid.Row="5" Grid.Column="1" Margin="5,0,5,5" x:Name="txtFileViewerPath" VerticalAlignment="Center" Text="{Binding Path=FileViewerPath, Mode=TwoWay}"/>
+            <Button Grid.Row="5" Grid.Column="2" Margin="0,0,5,5" Padding="5,0,5,0" x:Name="btnFileViewerBrowse" Content="Browse" Click="btnFileViewerBrowse_Click"/>
+
+            <Label Grid.Row="6" Grid.Column="0" Margin="20,0,5,5" Content="Arguments" VerticalContentAlignment="Top"/>
+            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="5,0,5,5">
+                <TextBox x:Name="txtFileViewerArgs" VerticalAlignment="Center" Text="{Binding Path=FileViewerArgs, Mode=TwoWay}"/>
+                <Label Margin="0,-5,0,0" Content="Use $FILE (required) and $LINE (optional) for filename and line number."/>
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="2">
