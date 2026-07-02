@@ -3,8 +3,10 @@ using CliWrap.EventStream;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -84,6 +86,74 @@ namespace rg_gui
 
         public bool IsPaused => m_isPaused;
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct PROCESSENTRY32
+        {
+            public uint dwSize;
+            public uint cntUsage;
+            public uint th32ProcessID;
+            public IntPtr th32DefaultHeapID;
+            public uint th32ModuleID;
+            public uint cntThreads;
+            public uint th32ParentProcessID;
+            public int pcPriClassBase;
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szExeFile;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+        private static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+        private static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("ntdll.dll", EntryPoint = "NtSuspendProcess")]
+        private static extern int NtSuspendProcess(IntPtr processHandle);
+
+        [DllImport("ntdll.dll", EntryPoint = "NtResumeProcess")]
+        private static extern int NtResumeProcess(IntPtr processHandle);
+
+        private static List<int> GetChildRipgrepProcessIds()
+        {
+            var pids = new List<int>();
+            uint currentPid = (uint)Environment.ProcessId;
+            IntPtr snapshot = CreateToolhelp32Snapshot(2, 0); // TH32CS_SNAPPROCESS = 2
+            if (snapshot == IntPtr.Zero || snapshot == (IntPtr)(-1))
+            {
+                return pids;
+            }
+
+            try
+            {
+                PROCESSENTRY32 pe32 = new PROCESSENTRY32();
+                pe32.dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32));
+
+                if (Process32First(snapshot, ref pe32))
+                {
+                    do
+                    {
+                        if (pe32.th32ParentProcessID == currentPid && pe32.szExeFile.Contains("rg", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pids.Add((int)pe32.th32ProcessID);
+                        }
+                    } while (Process32Next(snapshot, ref pe32));
+                }
+            }
+            finally
+            {
+                CloseHandle(snapshot);
+            }
+            return pids;
+        }
+
         public void Pause()
         {
             lock (m_pauseLock)
@@ -92,6 +162,20 @@ namespace rg_gui
                 {
                     m_isPaused = true;
                     m_pauseTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                    var childPids = GetChildRipgrepProcessIds();
+                    foreach (var pid in childPids)
+                    {
+                        try
+                        {
+                            using var proc = Process.GetProcessById(pid);
+                            NtSuspendProcess(proc.Handle);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Failed to suspend process {pid}: {ex.Message}");
+                        }
+                    }
                 }
             }
         }
@@ -104,6 +188,20 @@ namespace rg_gui
                 {
                     m_isPaused = false;
                     m_pauseTcs.TrySetResult(true);
+
+                    var childPids = GetChildRipgrepProcessIds();
+                    foreach (var pid in childPids)
+                    {
+                        try
+                        {
+                            using var proc = Process.GetProcessById(pid);
+                            NtResumeProcess(proc.Handle);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Failed to resume process {pid}: {ex.Message}");
+                        }
+                    }
                 }
             }
         }
