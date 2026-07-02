@@ -755,7 +755,7 @@ namespace rg_gui
                         if (chkShowAllLines.IsChecked == true)
                         {
                             string escapedFile = item.File.Replace("\"", "\"\"");
-                            writer.WriteLine($"\"{escapFile}\",{item.Line},\"{escapedContent}\"");
+                            writer.WriteLine($"\"{escapedFile}\",{item.Line},\"{escapedContent}\"");
                         }
                         else
                         {
