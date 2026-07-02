@@ -1,4 +1,4 @@
-﻿using CliWrap;
+using CliWrap;
 using CliWrap.EventStream;
 using System;
 using System.Collections.Concurrent;
@@ -78,15 +78,61 @@ namespace rg_gui
 
         private readonly string m_ripGrepPath;
 
+        private readonly object m_pauseLock = new object();
+        private volatile bool m_isPaused = false;
+        private TaskCompletionSource<bool> m_pauseTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsPaused => m_isPaused;
+
+        public void Pause()
+        {
+            lock (m_pauseLock)
+            {
+                if (!m_isPaused)
+                {
+                    m_isPaused = true;
+                    m_pauseTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
+        }
+
+        public void Resume()
+        {
+            lock (m_pauseLock)
+            {
+                if (m_isPaused)
+                {
+                    m_isPaused = false;
+                    m_pauseTcs.TrySetResult(true);
+                }
+            }
+        }
+
+        public Task WaitIfPausedAsync(CancellationToken cancellationToken)
+        {
+            Task task;
+            lock (m_pauseLock)
+            {
+                if (!m_isPaused)
+                {
+                    return Task.CompletedTask;
+                }
+                task = m_pauseTcs.Task;
+            }
+            return task.WaitAsync(cancellationToken);
+        }
+
         public RipGrepWrapper(string ripGrepPath)
         {
             m_ripGrepPath = ripGrepPath;
+            m_pauseTcs.TrySetResult(true);
         }
 
         public void Clear()
         {
             FilesFound.Clear();
             FileResults.Clear();
+            Resume();
         }
 
         public async Task Search(SearchParameters searchParameters, CancellationToken cancellationToken)
@@ -185,6 +231,8 @@ namespace rg_gui
             {
                 await foreach (var cmdEvent in cmd.ListenAsync(Encoding.UTF8, cancellationToken))
                 {
+                    await WaitIfPausedAsync(cancellationToken);
+
                     switch (cmdEvent)
                     {
                         case StandardOutputCommandEvent stdOut:

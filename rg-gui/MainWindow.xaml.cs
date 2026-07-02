@@ -1,4 +1,4 @@
-﻿using FramePFX.Themes;
+using FramePFX.Themes;
 using Ookii.Dialogs.Wpf;
 using Peter;
 using System;
@@ -185,6 +185,9 @@ namespace rg_gui
 
             m_fileViewerPath = config.AppSettings.Settings["FileViewerPath"]?.Value ?? string.Empty;
             m_fileViewerArgs = config.AppSettings.Settings["FileViewerArgs"]?.Value ?? string.Empty;
+
+            bool hasLocalSettings = config.AppSettings.Settings["BasePath"] != null;
+            LoadFileSeekSettings(force: !hasLocalSettings);
         }
 
         private static void SetConfigValue(Configuration config, string key, string value)
@@ -406,6 +409,8 @@ namespace rg_gui
             btnStart.IsEnabled = false;
             btnCancel.IsEnabled = true;
             btnSettings.IsEnabled = false;
+            btnPause.IsEnabled = true;
+            btnPause.Content = "Pause";
             var cancellationTokenSource = new CancellationTokenSource();
             m_cancellationTokenSource = cancellationTokenSource;
 
@@ -446,6 +451,9 @@ namespace rg_gui
                 btnCancel.IsEnabled = false;
                 btnStart.IsEnabled = true;
                 btnSettings.IsEnabled = true;
+                btnPause.IsEnabled = false;
+                btnPause.Content = "Pause";
+                m_ripGrepWrapper.Resume();
 
                 m_cancellationTokenSource = null;
                 cancellationTokenSource.Cancel();
@@ -472,7 +480,147 @@ namespace rg_gui
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)
         {
+            m_ripGrepWrapper.Resume();
             m_cancellationTokenSource?.Cancel();
+        }
+
+        private void btnPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (m_ripGrepWrapper.IsPaused)
+            {
+                m_ripGrepWrapper.Resume();
+                btnPause.Content = "Pause";
+            }
+            else
+            {
+                m_ripGrepWrapper.Pause();
+                btnPause.Content = "Resume";
+            }
+        }
+
+        private void btnImportFileSeek_Click(object sender, RoutedEventArgs e)
+        {
+            LoadFileSeekSettings(force: true);
+            MessageBox.Show("Configuración de FileSeek Pro cargada con éxito.", "Sincronización");
+        }
+
+        private void LoadFileSeekSettings(bool force = false)
+        {
+            try
+            {
+                using var mainKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Binary Fortress Software\FileSeek");
+                if (mainKey != null)
+                {
+                    // Configuración del visor de archivos externo
+                    string? openOther = mainKey.GetValue("OpenOther") as string;
+                    string? openWithLastExe = mainKey.GetValue("OpenWithLastExeSelected") as string;
+                    string? openOtherArgs = mainKey.GetValue("OpenOtherArgs") as string;
+
+                    string fsFileViewerPath = !string.IsNullOrEmpty(openOther) ? openOther : (openWithLastExe ?? "");
+                    string fsFileViewerArgs = openOtherArgs ?? "";
+
+                    if (!string.IsNullOrEmpty(fsFileViewerArgs))
+                    {
+                        fsFileViewerArgs = Regex.Replace(fsFileViewerArgs, @"\$file\$", "$FILE", RegexOptions.IgnoreCase);
+                        fsFileViewerArgs = Regex.Replace(fsFileViewerArgs, @"\$line\$", "$LINE", RegexOptions.IgnoreCase);
+                    }
+
+                    if (force || string.IsNullOrEmpty(m_fileViewerPath))
+                    {
+                        m_fileViewerPath = fsFileViewerPath;
+                    }
+                    if (force || string.IsNullOrEmpty(m_fileViewerArgs))
+                    {
+                        m_fileViewerArgs = fsFileViewerArgs;
+                    }
+
+                    // Configuración del perfil de búsqueda
+                    using var profileKey = mainKey.OpenSubKey("DefaultProfile");
+                    if (profileKey != null)
+                    {
+                        if (force || string.IsNullOrEmpty(txtBasePath.Text))
+                        {
+                            var paths = profileKey.GetValue("LastUsedPath") as string[];
+                            if (paths != null && paths.Length > 0)
+                            {
+                                var splitPaths = paths[0].Split('|', StringSplitOptions.RemoveEmptyEntries);
+                                if (splitPaths.Length > 0)
+                                    txtBasePath.Text = splitPaths[0];
+                            }
+                        }
+
+                        if (force || string.IsNullOrEmpty(txtIncludeFiles.Text))
+                        {
+                            var includes = profileKey.GetValue("LastUsedFilesInclude") as string[];
+                            if (includes != null && includes.Length > 0)
+                            {
+                                txtIncludeFiles.Text = string.Join(",", includes[0].Split('|', StringSplitOptions.RemoveEmptyEntries));
+                            }
+                        }
+
+                        if (force || string.IsNullOrEmpty(txtExcludeFiles.Text))
+                        {
+                            var excludes = profileKey.GetValue("LastUsedFilesExclude") as string[];
+                            if (excludes != null && excludes.Length > 0)
+                            {
+                                txtExcludeFiles.Text = string.Join(",", excludes[0].Split('|', StringSplitOptions.RemoveEmptyEntries));
+                            }
+                        }
+
+                        if (force || string.IsNullOrEmpty(txtContainingText.Text))
+                        {
+                            var queries = profileKey.GetValue("LastUsedQuery") as string[];
+                            if (queries != null && queries.Length > 0)
+                            {
+                                txtContainingText.Text = queries[0];
+                            }
+                        }
+
+                        if (force)
+                        {
+                            var caseSens = profileKey.GetValue("CaseSensitive") as string;
+                            if (caseSens != null)
+                            {
+                                chkCaseSensitive.IsChecked = caseSens == "1";
+                            }
+
+                            var subFolders = profileKey.GetValue("SearchSubFolders") as string;
+                            if (subFolders != null)
+                            {
+                                chkRecursive.IsChecked = subFolders == "1";
+                            }
+
+                            var isRegex = profileKey.GetValue("IsQueryRegEx") as string;
+                            if (isRegex != null)
+                            {
+                                chkRegularExpression.IsChecked = isRegex == "1";
+                            }
+                        }
+                        else
+                        {
+                            if (chkCaseSensitive.IsChecked == null)
+                            {
+                                var caseSens = profileKey.GetValue("CaseSensitive") as string;
+                                if (caseSens != null) chkCaseSensitive.IsChecked = caseSens == "1";
+                            }
+                            if (chkRecursive.IsChecked == null)
+                            {
+                                var subFolders = profileKey.GetValue("SearchSubFolders") as string;
+                                if (subFolders != null) chkRecursive.IsChecked = subFolders == "1";
+                            }
+                            if (chkRegularExpression.IsChecked == null)
+                            {
+                                var isRegex = profileKey.GetValue("IsQueryRegEx") as string;
+                                if (isRegex != null) chkRegularExpression.IsChecked = isRegex == "1";
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error loading FileSeek settings: " + ex.Message);
+            }
         }
 
         private void btnSettings_Click(object sender, RoutedEventArgs e)
