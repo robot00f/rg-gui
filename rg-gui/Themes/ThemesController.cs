@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Windows;
@@ -42,8 +42,8 @@ namespace FramePFX.Themes {
             }
 
             CurrentTheme = theme;
-            ThemeDictionary = new ResourceDictionary() { Source = new Uri($"Themes/ColourDictionaries/{themeName}.xaml", UriKind.Relative) };
-            ControlColours = new ResourceDictionary() { Source = new Uri("Themes/ControlColours.xaml", UriKind.Relative) };
+            ThemeDictionary = new ResourceDictionary() { Source = new Uri($"pack://application:,,,/Themes/ColourDictionaries/{themeName}.xaml", UriKind.Absolute) };
+            ControlColours = new ResourceDictionary() { Source = new Uri("pack://application:,,,/Themes/ControlColours.xaml", UriKind.Absolute) };
             RefreshControls();
         }
 

@@ -49,19 +49,10 @@ namespace rg_gui
 
         public MainWindow(string? basePath, string? includeFiles, string? excludeFiles, string? containingText)
         {
-            InitializeComponent();
-
-            // Load global configurations
+            // Load global configurations first (before InitializeComponent!)
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             
-            // Set window geometry
-            if (double.TryParse(config.AppSettings.Settings["MainWindowLeft"]?.Value, out var left)) Left = left;
-            if (double.TryParse(config.AppSettings.Settings["MainWindowTop"]?.Value, out var top)) Top = top;
-            if (double.TryParse(config.AppSettings.Settings["MainWindowWidth"]?.Value, out var width)) Width = width;
-            if (double.TryParse(config.AppSettings.Settings["MainWindowHeight"]?.Value, out var height)) Height = height;
-            if (Enum.TryParse<WindowState>(config.AppSettings.Settings["MainWindowState"]?.Value, out var windowState)) WindowState = windowState;
-
-            CurrentTheme = Enum.TryParse<ThemeType>(config.AppSettings.Settings["Theme"]?.Value, out var themeName) ? themeName : DEFAULT_THEME;
+            CurrentTheme = Enum.TryParse<ThemeType>(config.AppSettings.Settings["Theme"]?.Value, true, out var themeName) ? themeName : DEFAULT_THEME;
             
             MaxSearchTerms = int.TryParse(config.AppSettings.Settings["MaxSearchTerms"]?.Value, out var maxSearchTerms) ? maxSearchTerms : DEFAULT_MAXSEARCHTERMS;
             MultipleHighlightColors = bool.TryParse(config.AppSettings.Settings["MultipleHighlightColors"]?.Value, out var multipleHighlightColors) ? multipleHighlightColors : DEFAULT_MULTIPLEHIGHLIGHTCOLORS;
@@ -69,6 +60,15 @@ namespace rg_gui
 
             FileViewerPath = config.AppSettings.Settings["FileViewerPath"]?.Value ?? string.Empty;
             FileViewerArgs = config.AppSettings.Settings["FileViewerArgs"]?.Value ?? string.Empty;
+
+            InitializeComponent();
+
+            // Set window geometry (must happen after InitializeComponent so window structures exist)
+            if (double.TryParse(config.AppSettings.Settings["MainWindowLeft"]?.Value, out var left)) Left = left;
+            if (double.TryParse(config.AppSettings.Settings["MainWindowTop"]?.Value, out var top)) Top = top;
+            if (double.TryParse(config.AppSettings.Settings["MainWindowWidth"]?.Value, out var width)) Width = width;
+            if (double.TryParse(config.AppSettings.Settings["MainWindowHeight"]?.Value, out var height)) Height = height;
+            if (Enum.TryParse<WindowState>(config.AppSettings.Settings["MainWindowState"]?.Value, out var windowState)) WindowState = windowState;
 
             // Setup first search tab with command-line arguments if present
             AddNewTab($"Search {m_tabCounter++}", basePath, includeFiles, excludeFiles, containingText);
@@ -154,7 +154,37 @@ namespace rg_gui
                 searchTab.CancelSearch();
             }
 
-            tabControlSearches.Items.Remove(tabItem);
+            // Temporarily detach SelectionChanged to avoid triggering the '+' tab logic
+            tabControlSearches.SelectionChanged -= tabControlSearches_SelectionChanged;
+
+            try
+            {
+                int closedIndex = tabControlSearches.Items.IndexOf(tabItem);
+                int selectedIndex = tabControlSearches.SelectedIndex;
+
+                tabControlSearches.Items.Remove(tabItem);
+
+                // If the closed tab was selected, we need to select a valid tab
+                if (selectedIndex == closedIndex)
+                {
+                    // Select the tab to the left (closedIndex - 1), or the first tab (0)
+                    int newSelect = Math.Max(0, closedIndex - 1);
+                    // Ensure we don't select the plus tab if there is at least one search tab left
+                    if (newSelect >= tabControlSearches.Items.Count - 1)
+                    {
+                        newSelect = tabControlSearches.Items.Count - 2;
+                    }
+                    if (newSelect >= 0)
+                    {
+                        tabControlSearches.SelectedIndex = newSelect;
+                    }
+                }
+            }
+            finally
+            {
+                // Re-attach SelectionChanged
+                tabControlSearches.SelectionChanged += tabControlSearches_SelectionChanged;
+            }
         }
 
         public static void SetConfigValue(Configuration config, string key, string value)
@@ -199,8 +229,15 @@ namespace rg_gui
                 searchTab.SaveTabConfig(config);
             }
 
-            config.Save();
-            ConfigurationManager.RefreshSection("appSettings");
+            try
+            {
+                config.Save();
+                ConfigurationManager.RefreshSection("appSettings");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to save configuration: {ex.Message}");
+            }
         }
     }
 

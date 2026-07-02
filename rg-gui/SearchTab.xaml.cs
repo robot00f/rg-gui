@@ -37,7 +37,7 @@ namespace rg_gui
         private int m_selectionStart;
         private int m_selectionLength;
 
-        public SearchTab()
+        public SearchTab(string? basePath = null, string? includeFiles = null, string? excludeFiles = null, string? containingText = null)
         {
             InitializeComponent();
 
@@ -54,10 +54,6 @@ namespace rg_gui
 
             // Load initial config values
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            cmbBasePath.Text = config.AppSettings.Settings["BasePath"]?.Value ?? MainWindow.DEFAULT_BASEPATH;
-            cmbIncludeFiles.Text = config.AppSettings.Settings["IncludeFiles"]?.Value ?? MainWindow.DEFAULT_INCLUDEFILES;
-            cmbExcludeFiles.Text = config.AppSettings.Settings["ExcludeFiles"]?.Value ?? MainWindow.DEFAULT_EXCLUDEFILES;
-            cmbContainingText.Text = config.AppSettings.Settings["ContainingText"]?.Value ?? MainWindow.DEFAULT_CONTAININGTEXT;
             chkCaseSensitive.IsChecked = bool.TryParse(config.AppSettings.Settings["CaseSensitive"]?.Value, out var caseSensitive) ? caseSensitive : MainWindow.DEFAULT_CASESENSITIVE;
             chkRecursive.IsChecked = bool.TryParse(config.AppSettings.Settings["Recursive"]?.Value, out var recursive) ? recursive : MainWindow.DEFAULT_RECURSIVE;
             chkRegularExpression.IsChecked = bool.TryParse(config.AppSettings.Settings["RegularExpression"]?.Value, out var regularExpression) ? regularExpression : MainWindow.DEFAULT_REGULAREXPRESSION;
@@ -83,14 +79,26 @@ namespace rg_gui
                 cmbFileSizeUnit.SelectedIndex = 0;
             }
 
-            // Load history lists
+            // 1. Load history lists (sets selection to default first item)
             LoadHistory(cmbBasePath, "HistoryBasePath");
             LoadHistory(cmbIncludeFiles, "HistoryIncludeFiles", new[] { "*.*" });
             LoadHistory(cmbExcludeFiles, "HistoryExcludeFiles", new[] { "*.exe|*.dll|*.so|*.bin|*.iso" });
             LoadHistory(cmbContainingText, "HistoryContainingText");
 
+            // 2. Load settings from FileSeek (overrides selection/history with Registry if present)
             bool hasLocalSettings = config.AppSettings.Settings["BasePath"] != null;
             LoadFileSeekSettings(force: !hasLocalSettings);
+
+            // 3. Set the active text fields (overriding any defaults/registry with config or command-line parameters)
+            var configBasePath = config.AppSettings.Settings["BasePath"]?.Value ?? MainWindow.DEFAULT_BASEPATH;
+            var configIncludeFiles = config.AppSettings.Settings["IncludeFiles"]?.Value ?? MainWindow.DEFAULT_INCLUDEFILES;
+            var configExcludeFiles = config.AppSettings.Settings["ExcludeFiles"]?.Value ?? MainWindow.DEFAULT_EXCLUDEFILES;
+            var configContainingText = config.AppSettings.Settings["ContainingText"]?.Value ?? MainWindow.DEFAULT_CONTAININGTEXT;
+
+            cmbBasePath.Text = basePath ?? configBasePath;
+            cmbIncludeFiles.Text = includeFiles ?? configIncludeFiles;
+            cmbExcludeFiles.Text = excludeFiles ?? configExcludeFiles;
+            cmbContainingText.Text = containingText ?? configContainingText;
         }
 
         public void CancelSearch()
@@ -128,11 +136,10 @@ namespace rg_gui
             }
         }
 
-        private void SaveHistory(ComboBox comboBox, string configKey)
+        private void SaveHistory(Configuration config, ComboBox comboBox, string configKey)
         {
             try
             {
-                var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
                 var currentText = comboBox.Text;
                 var items = comboBox.ItemsSource as List<string> ?? new List<string>();
 
@@ -153,7 +160,6 @@ namespace rg_gui
 
                 var historyStr = string.Join('|', list);
                 MainWindow.SetConfigValue(config, configKey, historyStr);
-                config.Save();
             }
             catch (Exception ex)
             {
@@ -166,20 +172,30 @@ namespace rg_gui
             try
             {
                 var val = profileKey.GetValue(valueName);
+                if (val == null) return;
+
+                var list = new List<string>();
                 if (val is string[] array)
                 {
-                    var list = new List<string>(array);
-                    comboBox.ItemsSource = list;
-                    if (list.Count > 0)
+                    foreach (var s in array)
                     {
-                        comboBox.Text = list[0];
+                        if (!string.IsNullOrEmpty(s))
+                        {
+                            list.AddRange(s.Split('|', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()));
+                        }
                     }
                 }
-                else if (val is string str)
+                else if (val is string str && !string.IsNullOrEmpty(str))
                 {
-                    var list = new List<string> { str };
+                    list.AddRange(str.Split('|', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()));
+                }
+
+                list = list.Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+
+                if (list.Count > 0)
+                {
                     comboBox.ItemsSource = list;
-                    comboBox.Text = str;
+                    comboBox.Text = list[0];
                 }
             }
             catch (Exception ex)
@@ -202,10 +218,10 @@ namespace rg_gui
             MainWindow.SetConfigValue(config, "MaxFileSize", txtMaxFileSize.Text);
             MainWindow.SetConfigValue(config, "MaxFileSizeUnit", ((ComboBoxItem)cmbFileSizeUnit.SelectedItem).Name);
 
-            SaveHistory(cmbBasePath, "HistoryBasePath");
-            SaveHistory(cmbIncludeFiles, "HistoryIncludeFiles");
-            SaveHistory(cmbExcludeFiles, "HistoryExcludeFiles");
-            SaveHistory(cmbContainingText, "HistoryContainingText");
+            SaveHistory(config, cmbBasePath, "HistoryBasePath");
+            SaveHistory(config, cmbIncludeFiles, "HistoryIncludeFiles");
+            SaveHistory(config, cmbExcludeFiles, "HistoryExcludeFiles");
+            SaveHistory(config, cmbContainingText, "HistoryContainingText");
         }
 
         private void LoadFileSeekSettings(bool force = false)
@@ -215,6 +231,24 @@ namespace rg_gui
                 using var mainKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Binary Fortress Software\FileSeek");
                 if (mainKey != null)
                 {
+                    // Load File Viewer executable path from FileSeek if not already configured in our app
+                    if (string.IsNullOrEmpty(MainWindow.FileViewerPath))
+                    {
+                        var openWithExe = mainKey.GetValue("OpenWithLastExeSelected") as string;
+                        if (!string.IsNullOrEmpty(openWithExe) && File.Exists(openWithExe))
+                        {
+                            MainWindow.FileViewerPath = openWithExe;
+                            if (string.IsNullOrEmpty(MainWindow.FileViewerArgs))
+                            {
+                                MainWindow.FileViewerArgs = "\"$FILE\"";
+                            }
+                            var localConfig = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+                            MainWindow.SetConfigValue(localConfig, "FileViewerPath", openWithExe);
+                            MainWindow.SetConfigValue(localConfig, "FileViewerArgs", MainWindow.FileViewerArgs);
+                            try { localConfig.Save(); } catch {}
+                        }
+                    }
+
                     var profileName = mainKey.GetValue("DefaultProfile") as string ?? "DefaultProfile";
                     using var profileKey = mainKey.OpenSubKey(profileName == "DefaultProfile" ? "DefaultProfile" : $@"Profiles\{profileName}");
                     if (profileKey != null)
@@ -258,11 +292,38 @@ namespace rg_gui
                             }
                         }
 
-                        // Load history lists from FileSeek registry
+                        // Load history lists from FileSeek registry (profile key with fallback to main key values)
                         LoadHistoryFromRegistry(cmbBasePath, profileKey, "LastUsedPath");
+                        if (cmbBasePath.Items.Count == 0)
+                        {
+                            LoadHistoryFromRegistry(cmbBasePath, mainKey, "PathHistory");
+                        }
+
                         LoadHistoryFromRegistry(cmbIncludeFiles, profileKey, "LastUsedFilesInclude");
+                        if (cmbIncludeFiles.Items.Count == 0)
+                        {
+                            LoadHistoryFromRegistry(cmbIncludeFiles, mainKey, "FilesIncludeHistory");
+                            if (cmbIncludeFiles.Items.Count == 0)
+                            {
+                                LoadHistoryFromRegistry(cmbIncludeFiles, mainKey, "IncludeHistory");
+                            }
+                        }
+
                         LoadHistoryFromRegistry(cmbExcludeFiles, profileKey, "LastUsedFilesExclude");
+                        if (cmbExcludeFiles.Items.Count == 0)
+                        {
+                            LoadHistoryFromRegistry(cmbExcludeFiles, mainKey, "FilesExcludeHistory");
+                            if (cmbExcludeFiles.Items.Count == 0)
+                            {
+                                LoadHistoryFromRegistry(cmbExcludeFiles, mainKey, "ExcludeHistory");
+                            }
+                        }
+
                         LoadHistoryFromRegistry(cmbContainingText, profileKey, "LastUsedQuery");
+                        if (cmbContainingText.Items.Count == 0)
+                        {
+                            LoadHistoryFromRegistry(cmbContainingText, mainKey, "QueryHistory");
+                        }
                     }
                 }
             }
@@ -461,7 +522,6 @@ namespace rg_gui
             var stopwatch = Stopwatch.StartNew();
             btnStart.IsEnabled = false;
             btnCancel.IsEnabled = true;
-            btnSettings.IsEnabled = false;
             btnPause.IsEnabled = true;
             btnPause.Content = "Pause";
             var cancellationTokenSource = new CancellationTokenSource();
@@ -480,10 +540,20 @@ namespace rg_gui
             }
 
             // Save history values
-            SaveHistory(cmbBasePath, "HistoryBasePath");
-            SaveHistory(cmbIncludeFiles, "HistoryIncludeFiles");
-            SaveHistory(cmbExcludeFiles, "HistoryExcludeFiles");
-            SaveHistory(cmbContainingText, "HistoryContainingText");
+            var exeConfig = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            SaveHistory(exeConfig, cmbBasePath, "HistoryBasePath");
+            SaveHistory(exeConfig, cmbIncludeFiles, "HistoryIncludeFiles");
+            SaveHistory(exeConfig, cmbExcludeFiles, "HistoryExcludeFiles");
+            SaveHistory(exeConfig, cmbContainingText, "HistoryContainingText");
+            try
+            {
+                exeConfig.Save();
+                ConfigurationManager.RefreshSection("appSettings");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error saving search history: {ex.Message}");
+            }
 
             try
             {
@@ -510,7 +580,6 @@ namespace rg_gui
             {
                 btnCancel.IsEnabled = false;
                 btnStart.IsEnabled = true;
-                btnSettings.IsEnabled = true;
                 btnPause.IsEnabled = false;
                 btnPause.Content = "Pause";
                 m_ripGrepWrapper.Resume();
@@ -562,10 +631,7 @@ namespace rg_gui
             }
         }
 
-        private void btnImportFileSeek_Click(object sender, RoutedEventArgs e)
-        {
-            LoadFileSeekSettings(force: true);
-        }
+
 
         private void chkShowAllLines_Checked(object sender, RoutedEventArgs e)
         {
@@ -923,6 +989,42 @@ namespace rg_gui
 
                 var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
                 MainWindow.SaveGlobalConfig(config);
+                try
+                {
+                    config.Save();
+                    ConfigurationManager.RefreshSection("appSettings");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to save config in settings click: {ex.Message}");
+                }
+
+                // Force reload history and active fields in the current tab UI
+                LoadHistory(cmbBasePath, "HistoryBasePath");
+                LoadHistory(cmbIncludeFiles, "HistoryIncludeFiles", new[] { "*.*" });
+                LoadHistory(cmbExcludeFiles, "HistoryExcludeFiles", new[] { "*.exe|*.dll|*.so|*.bin|*.iso" });
+                LoadHistory(cmbContainingText, "HistoryContainingText");
+
+                var configBasePath = config.AppSettings.Settings["BasePath"]?.Value;
+                if (!string.IsNullOrEmpty(configBasePath)) cmbBasePath.Text = configBasePath;
+
+                var configIncludeFiles = config.AppSettings.Settings["IncludeFiles"]?.Value;
+                if (!string.IsNullOrEmpty(configIncludeFiles)) cmbIncludeFiles.Text = configIncludeFiles;
+
+                var configExcludeFiles = config.AppSettings.Settings["ExcludeFiles"]?.Value;
+                if (!string.IsNullOrEmpty(configExcludeFiles)) cmbExcludeFiles.Text = configExcludeFiles;
+
+                var configContainingText = config.AppSettings.Settings["ContainingText"]?.Value;
+                if (!string.IsNullOrEmpty(configContainingText)) cmbContainingText.Text = configContainingText;
+
+                var caseSensVal = config.AppSettings.Settings["CaseSensitive"]?.Value;
+                if (bool.TryParse(caseSensVal, out var caseSensitive)) chkCaseSensitive.IsChecked = caseSensitive;
+
+                var recursiveVal = config.AppSettings.Settings["Recursive"]?.Value;
+                if (bool.TryParse(recursiveVal, out var recursive)) chkRecursive.IsChecked = recursive;
+
+                var isRegexVal = config.AppSettings.Settings["RegularExpression"]?.Value;
+                if (bool.TryParse(isRegexVal, out var isRegex)) chkRegularExpression.IsChecked = isRegex;
             }
         }
 
@@ -940,6 +1042,8 @@ namespace rg_gui
 
         private void txtBasePath_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (!IsLoaded) return;
+            if (cmbBasePath == null) return;
             UpdateFolderSuggestionValues();
             var input = cmbBasePath.Text;
             if (input.Length > m_currentInput.Length && input != m_currentSuggestion)
@@ -962,6 +1066,8 @@ namespace rg_gui
 
         private void UpdateFolderSuggestionValues()
         {
+            if (!IsLoaded) return;
+            if (cmbBasePath == null) return;
             var input = cmbBasePath.Text;
             if (input.EndsWith(Path.DirectorySeparatorChar) && Directory.Exists(input))
             {
@@ -978,13 +1084,16 @@ namespace rg_gui
 
         private void txtMaxFileSize_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (!IsLoaded) return;
+            if (txtMaxFileSize == null) return;
             var input = txtMaxFileSize.Text;
             txtMaxFileSize.Text = new string(input.Where(c => char.IsDigit(c)).ToArray());
         }
 
         private void cmbFileSizeUnit_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (txtMaxFileSize != null)
+            if (!IsLoaded) return;
+            if (txtMaxFileSize != null && cmbFileSizeUnit != null)
             {
                 txtMaxFileSize.IsEnabled = (cmbFileSizeUnit.SelectedIndex != 0);
             }

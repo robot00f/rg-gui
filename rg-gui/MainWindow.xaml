@@ -9,16 +9,56 @@
         Closing="OnClosing" Icon="pack://application:,,,/icon.ico"
         Style="{StaticResource CustomWindowStyle}">
 
-    <Grid Margin="5,5,5,5">
-        <TabControl x:Name="tabControlSearches" SelectionChanged="tabControlSearches_SelectionChanged">
+    <Grid Margin="5,5,5,5" Background="{DynamicResource Window.Static.Background}">
+        <TabControl x:Name="tabControlSearches" SelectionChanged="tabControlSearches_SelectionChanged" Background="{DynamicResource Window.Static.Background}" BorderThickness="0">
             <TabControl.Resources>
+                <Style TargetType="TabControl">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabControl">
+                                <Grid KeyboardNavigation.TabNavigation="Local">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TabPanel x:Name="HeaderPanel" Grid.Row="0" Panel.ZIndex="1" IsItemsHost="True" KeyboardNavigation.TabIndex="1" Background="Transparent"/>
+                                    <Border x:Name="Border" Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" KeyboardNavigation.DirectionalNavigation="Contained" KeyboardNavigation.TabIndex="2" KeyboardNavigation.TabNavigation="Cycle">
+                                        <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="0"/>
+                                    </Border>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
                 <Style TargetType="TabItem">
                     <Setter Property="Padding" Value="10,4,10,4"/>
+                    <Setter Property="Background" Value="{DynamicResource Window.Static.Background}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource Window.Static.Foreground}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource TextBox.Static.Border}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Border x:Name="templateBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,1,1,0" CornerRadius="4,4,0,0" Margin="0,0,2,0" SnapsToDevicePixels="true">
+                                    <ContentPresenter x:Name="contentPresenter" ContentSource="Header" Focusable="false" HorizontalAlignment="Center" Margin="{TemplateBinding Padding}" RecognizesAccessKey="true" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" TargetName="templateBorder" Value="{DynamicResource Button.Static.Background}"/>
+                                        <Setter Property="TextElement.Foreground" TargetName="contentPresenter" Value="{DynamicResource Window.Static.Foreground}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" TargetName="templateBorder" Value="{DynamicResource Button.MouseOver.Background}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
                 </Style>
             </TabControl.Resources>
             
             <!-- We will populate search tabs programmatically, plusTab is always last -->
-            <TabItem x:Name="plusTab" Header="+" FontWeight="Bold" FontSize="14" Width="30" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+            <TabItem x:Name="plusTab" Header="+" FontWeight="Bold" FontSize="14" Width="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
         </TabControl>
     </Grid>
 </Window>

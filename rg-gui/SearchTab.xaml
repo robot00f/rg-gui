@@ -5,7 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:rg_gui"
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="800">
+             d:DesignHeight="600" d:DesignWidth="800"
+             Background="{DynamicResource Window.Static.Background}">
     <UserControl.Resources>
         <CollectionViewSource x:Key="FileResultItemsCollectionViewSource" Source="{Binding FileResultItems, RelativeSource={RelativeSource AncestorType=local:SearchTab}}"/>
         <CollectionViewSource x:Key="ResultLineItemsCollectionViewSource" Source="{Binding ResultLineItems, RelativeSource={RelativeSource AncestorType=local:SearchTab}}"/>
@@ -35,17 +36,40 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Label Grid.Row="0" Grid.Column="0" Margin="0,0,5,5" Content="In Folder" VerticalContentAlignment="Center"/>
-            <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,5" x:Name="cmbBasePath" IsEditable="True" VerticalContentAlignment="Center" TabIndex="0" TextBox.TextChanged="txtBasePath_TextChanged"/>
+            <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,5" x:Name="cmbBasePath" IsEditable="True" VerticalContentAlignment="Center" TabIndex="0" TextBox.TextChanged="txtBasePath_TextChanged" Height="24">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" MaxWidth="500" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
             <Button Grid.Row="0" Grid.Column="4" Margin="5,0,0,5" x:Name="btnBrowse" Content="Browse" Click="btnBrowse_Click" MinWidth="80" />
             <Button Grid.Row="0" Grid.Column="5" Margin="5,0,0,5" x:Name="btnStart" Content="Start" Click="btnStart_Click" MinWidth="80" TabIndex="4"/>
             <Label Grid.Row="1" Grid.Column="0" Margin="0,0,5,5" Content="Include Files" VerticalContentAlignment="Center"/>
-            <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,5" x:Name="cmbIncludeFiles" IsEditable="True" VerticalContentAlignment="Center" TabIndex="1"/>
+            <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,5" x:Name="cmbIncludeFiles" IsEditable="True" VerticalContentAlignment="Center" TabIndex="1" Height="24">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" MaxWidth="500" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
             <Label Grid.Row="1" Grid.Column="2" Margin="5,0,5,5" Content="Exclude Files" VerticalContentAlignment="Center"/>
-            <ComboBox Grid.Row="1" Grid.Column="3" Margin="0,0,0,5" x:Name="cmbExcludeFiles" IsEditable="True" VerticalContentAlignment="Center" TabIndex="2"/>
-            <Button Grid.Row="1" Grid.Column="4" Margin="5,0,0,5" x:Name="btnImportFileSeek" Content="Load FileSeek" Click="btnImportFileSeek_Click" MinWidth="80" TabIndex="8" ToolTip="Import settings from FileSeek Pro registry"/>
-            <Button Grid.Row="1" Grid.Column="5" Margin="5,0,0,5" x:Name="btnPause" Content="Pause" Click="btnPause_Click" MinWidth="80" IsEnabled="False" TabIndex="7"/>
+            <ComboBox Grid.Row="1" Grid.Column="3" Margin="0,0,0,5" x:Name="cmbExcludeFiles" IsEditable="True" VerticalContentAlignment="Center" TabIndex="2" Height="24">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" MaxWidth="500" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Row="1" Grid.Column="4" Grid.ColumnSpan="2" Margin="5,0,0,5" x:Name="btnPause" Content="Pause" Click="btnPause_Click" MinWidth="80" IsEnabled="False" TabIndex="7"/>
             <Label Grid.Row="2" Grid.Column="0" Margin="0,0,5,5" Content="Containing Text" VerticalContentAlignment="Center"/>
-            <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,5" x:Name="cmbContainingText" IsEditable="True" VerticalContentAlignment="Center" KeyDown="txtContainingText_OnKeyDown" TabIndex="3"/>
+            <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,5" x:Name="cmbContainingText" IsEditable="True" VerticalContentAlignment="Center" KeyDown="txtContainingText_OnKeyDown" TabIndex="3" Height="24">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" MaxWidth="500" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
             <Button Grid.Row="2" Grid.Column="4" Margin="5,0,0,5" x:Name="btnSettings" Content="Settings" Click="btnSettings_Click" MinWidth="80" TabIndex="6"/>
             <Button Grid.Row="2" Grid.Column="5" Margin="5,0,0,5" x:Name="btnCancel" Content="Cancel" Click="btnCancel_Click" IsEnabled="False" TabIndex="5"/>
         </Grid>
@@ -89,7 +113,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <DataGrid Grid.Row="0" Grid.Column="0" x:Name="gridFileResults" ItemsSource="{Binding Source={StaticResource FileResultItemsCollectionViewSource}}" AutoGenerateColumns="False" MouseDown="gridFileResults_MouseDown" SelectionChanged="gridFileResults_SelectionChanged" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False">
+            <DataGrid Grid.Row="0" Grid.Column="0" x:Name="gridFileResults" ItemsSource="{Binding Source={StaticResource FileResultItemsCollectionViewSource}}" AutoGenerateColumns="False" MouseDown="gridFileResults_MouseDown" SelectionChanged="gridFileResults_SelectionChanged" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False" Background="{DynamicResource DataGrid.Static.Background}">
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
                         <Style.Setters>
@@ -100,14 +124,14 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Filename" Binding="{Binding Filename, Mode=OneWay}"/>
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path, Mode=OneWay}"/>
+                    <DataGridTextColumn Header="Filename" Binding="{Binding Filename, Mode=OneWay}" Width="150"/>
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path, Mode=OneWay}" Width="*"/>
                 </DataGrid.Columns>
             </DataGrid>
 
             <GridSplitter Grid.Row="0" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
 
-            <DataGrid Grid.Row="0" Grid.Column="2" x:Name="gridResultLines" ItemsSource="{Binding Source={StaticResource ResultLineItemsCollectionViewSource}}" AutoGenerateColumns="False" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False" SelectionUnit="FullRow" ContextMenuOpening="gridResultLines_ContextMenuOpening">
+            <DataGrid Grid.Row="0" Grid.Column="2" x:Name="gridResultLines" ItemsSource="{Binding Source={StaticResource ResultLineItemsCollectionViewSource}}" AutoGenerateColumns="False" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False" SelectionUnit="FullRow" ContextMenuOpening="gridResultLines_ContextMenuOpening" Background="{DynamicResource DataGrid.Static.Background}">
                 <DataGrid.Resources>
                     <ContextMenu x:Key="lineContextMenu">
                         <MenuItem Header="Open in File Viewer" Click="openInFileViewer_Click" InputGestureText="F3"/>
@@ -131,9 +155,9 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn x:Name="colFile" Header="File" Binding="{Binding File, Mode=OneWay}" Visibility="Collapsed"/>
-                    <DataGridTextColumn Header="Line" Binding="{Binding Line, Mode=OneWay}" SortDirection="Ascending"/>
-                    <DataGridTemplateColumn Header="Content" SortMemberPath="Line">
+                    <DataGridTextColumn x:Name="colFile" Header="File" Binding="{Binding File, Mode=OneWay}" Visibility="Collapsed" Width="150"/>
+                    <DataGridTextColumn Header="Line" Binding="{Binding Line, Mode=OneWay}" SortDirection="Ascending" Width="60"/>
+                    <DataGridTemplateColumn Header="Content" SortMemberPath="Line" Width="*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <local:SelectableTextBlock local:TextBlockFormatter.Text="{Binding Path=Content, Mode=OneWay}" />
@@ -144,13 +168,13 @@
             </DataGrid>
         </Grid>
 
-        <StatusBar Grid.Row="3" Background="Transparent">
+        <StatusBar Grid.Row="3" Background="{DynamicResource StatusBar.Static.Background}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource StatusBar.Static.Border}">
             <StatusBarItem>
-                <TextBlock x:Name="txtFileListStatus" Text="" Margin="5,0,0,0"/>
+                <TextBlock x:Name="txtFileListStatus" Text="" Margin="5,0,0,0" Foreground="{DynamicResource StatusBar.Static.Foreground}"/>
             </StatusBarItem>
-            <Separator Grid.Column="1" />
+            <Separator Grid.Column="1" Background="{DynamicResource StatusBar.Static.Border}"/>
             <StatusBarItem>
-                <TextBlock x:Name="txtResultLineStatus" Text="" Margin="5,0,0,0"/>
+                <TextBlock x:Name="txtResultLineStatus" Text="" Margin="5,0,0,0" Foreground="{DynamicResource StatusBar.Static.Foreground}"/>
             </StatusBarItem>
         </StatusBar>
     </Grid>
