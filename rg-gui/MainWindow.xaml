@@ -114,6 +114,8 @@
                     <ContextMenu x:Key="lineContextMenu">
                         <MenuItem Header="Open in File Viewer" Click="openInFileViewer_Click" InputGestureText="F3"/>
                         <Separator />
+                        <MenuItem Header="Select All" Click="selectAllLines_Click" InputGestureText="Ctrl+A"/>
+                        <Separator />
                         <MenuItem Header="Copy Selected Lines" Click="copySelectedLines_Click" InputGestureText="Ctrl+C"/>
                         <MenuItem Header="Copy All Lines" Click="copyAllLines_Click"/>
                         <Separator />

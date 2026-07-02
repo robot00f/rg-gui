@@ -638,6 +638,7 @@ namespace rg_gui
 
         private void chkShowAllLines_Checked(object sender, RoutedEventArgs e)
         {
+            if (m_ripGrepWrapper == null) return;
             if (colFile != null)
             {
                 colFile.Visibility = Visibility.Visible;
@@ -647,11 +648,12 @@ namespace rg_gui
 
         private void chkShowAllLines_Unchecked(object sender, RoutedEventArgs e)
         {
+            if (m_ripGrepWrapper == null) return;
             if (colFile != null)
             {
                 colFile.Visibility = Visibility.Collapsed;
             }
-            if (gridFileResults.SelectedItem is FileSearchResult selectedFile)
+            if (gridFileResults != null && gridFileResults.SelectedItem is FileSearchResult selectedFile)
             {
                 ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
                 var lineResults = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == selectedFile.Path && x.Key.filename == selectedFile.Filename);
@@ -666,6 +668,12 @@ namespace rg_gui
                 ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
                 txtResultLineStatus.Text = string.Empty;
             }
+        }
+
+        private void selectAllLines_Click(object sender, RoutedEventArgs e)
+        {
+            gridResultLines.Focus();
+            gridResultLines.SelectAll();
         }
 
         private void PopulateAllLines()
