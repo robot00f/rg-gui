@@ -78,6 +78,12 @@ namespace rg_gui
             FileFound?.Invoke(this, (path, filename));
         }
 
+        public event EventHandler<(string path, string filename, int lineNumber, string lineContent, IEnumerable<TermResult> termResults)>? LineFound;
+        protected void RaiseLineFound(string path, string filename, int lineNumber, string lineContent, IEnumerable<TermResult> termResults)
+        {
+            LineFound?.Invoke(this, (path, filename, lineNumber, lineContent, termResults));
+        }
+
         private readonly string m_ripGrepPath;
 
         private readonly object m_pauseLock = new object();
@@ -369,6 +375,8 @@ namespace rg_gui
                                         {
                                             FileResults[(path, filename, lineNumber)].TermResults.Add(termMatch);
                                         }
+
+                                        RaiseLineFound(path, filename, lineNumber, RemoveAnsiColors(result[2]), termMatches);
                                     }
                                 }
                             }
