@@ -103,8 +103,15 @@ namespace rg_gui
 
         public void CancelSearch()
         {
-            m_ripGrepWrapper?.Resume();
-            m_cancellationTokenSource?.Cancel();
+            try
+            {
+                m_ripGrepWrapper?.Resume();
+                m_cancellationTokenSource?.Cancel();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error during CancelSearch: {ex.Message}");
+            }
         }
 
         private void LoadHistory(ComboBox comboBox, string configKey, string[]? defaultItems = null)

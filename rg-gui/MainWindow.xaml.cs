@@ -211,6 +211,15 @@ namespace rg_gui
 
         private void OnClosing(object? sender, EventArgs e)
         {
+            // Cancel searches in all tabs to clean up background processes (like suspended rg.exe)
+            foreach (var item in tabControlSearches.Items)
+            {
+                if (item is TabItem tabItem && tabItem.Content is SearchTab tab)
+                {
+                    tab.CancelSearch();
+                }
+            }
+
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             if (WindowState != WindowState.Minimized)
             {
