@@ -1,13 +1,22 @@
-﻿# rg-gui: A Simple RipGrep GUI for Windows
+# rg-gui: A Simple RipGrep GUI for Windows
 
 ![screenshot](screenshot.png)
 ![screenshot2](screenshot2.png)
 
-[![License: MIT](https://img.shields.io/github/license/kcowolf/rg-gui)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/github/license/robot00f/rg-gui)](https://opensource.org/licenses/MIT)
+
+## Features
+
+* **Multi-Tab Interface**: Run multiple independent search sessions concurrently. Easily spawn new tabs using the `+` tab and close active tabs with close buttons.
+* **Dropdown History Autocomplete**: Dropdown history comboboxes for search inputs ("In Folder", "Include Files", "Exclude Files", "Containing Text") to quickly select from previous search entries.
+* **FileSeek Settings & History Importer**: Easily import search configurations, history paths (`PathHistory`, `QueryHistory`, `IncludeHistory`, `ExcludeHistory`), and custom editors (`OpenWithLastExeSelected`) from FileSeek Pro registry profiles directly into the Settings window.
+* **Horizontal Scrollable Results**: Columns for matched lines in the results grid support horizontal scrolling, enabling you to read long lines without maximizing the window.
+* **Persistent Settings & Theme**: Selected visual themes (Light/Dark) and window layouts persist automatically on restart.
+* **Always-Enabled Settings**: Modify highlighting options, active themes, and file viewer paths even while a search is running.
 
 ## Installation
 
-Download the latest release of rg-gui from the [Releases page](https://github.com/kcowolf/rg-gui/releases).  Unzip it to a convenient location such as `C:\rg-gui`.
+Download the latest release of rg-gui from the [Releases page](https://github.com/robot00f/rg-gui/releases).  Unzip it to a convenient location such as `C:\rg-gui`.
 
 The RipGrep executable `rg.exe` is included in the rg-gui release.  It needs to be in the same folder as `rg-gui.exe`.
 
