@@ -89,10 +89,13 @@ namespace rg_gui
 
             public string Content { get; }
 
-            public ResultLine(int line, string content)
+            public string File { get; }
+
+            public ResultLine(int line, string content, string file = "")
             {
                 Line = line;
                 Content = content;
+                File = file;
             }
         }
 
@@ -295,6 +298,11 @@ namespace rg_gui
 
         private void gridFileResults_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
+            if (chkShowAllLines.IsChecked == true)
+            {
+                return;
+            }
+
             if (e.AddedItems.Count > 0)
             {
                 if (e.AddedItems[0] is FileSearchResult addedItem)
@@ -308,7 +316,7 @@ namespace rg_gui
 
                     foreach (var lineResult in lineResults)
                     {
-                        ResultLineItems.Add(new ResultLine(lineResult.Key.lineNumber, GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim()));
+                        ResultLineItems.Add(new ResultLine(lineResult.Key.lineNumber, GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(), lineResult.Key.filename));
                     }
 
                     txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
@@ -461,6 +469,11 @@ namespace rg_gui
 
             stopwatch.Stop();
             txtFileListStatus.Text = $"Found {FileResultItems.Count} files.  Took {stopwatch.Elapsed.TotalSeconds:0.00} seconds.";
+
+            if (chkShowAllLines.IsChecked == true)
+            {
+                PopulateAllLines();
+            }
         }
 
         private void btnBrowse_Click(object sender, RoutedEventArgs e)
@@ -620,6 +633,141 @@ namespace rg_gui
             catch (Exception ex)
             {
                 Debug.WriteLine("Error loading FileSeek settings: " + ex.Message);
+            }
+        }
+
+        private void chkShowAllLines_Checked(object sender, RoutedEventArgs e)
+        {
+            if (colFile != null)
+            {
+                colFile.Visibility = Visibility.Visible;
+            }
+            PopulateAllLines();
+        }
+
+        private void chkShowAllLines_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (colFile != null)
+            {
+                colFile.Visibility = Visibility.Collapsed;
+            }
+            if (gridFileResults.SelectedItem is FileSearchResult selectedFile)
+            {
+                ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
+                var lineResults = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == selectedFile.Path && x.Key.filename == selectedFile.Filename);
+                foreach (var lineResult in lineResults)
+                {
+                    ResultLineItems.Add(new ResultLine(lineResult.Key.lineNumber, GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(), lineResult.Key.filename));
+                }
+                txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
+            }
+            else
+            {
+                ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
+                txtResultLineStatus.Text = string.Empty;
+            }
+        }
+
+        private void PopulateAllLines()
+        {
+            var allLines = new List<ResultLine>();
+            foreach (var lineResult in m_ripGrepWrapper.FileResults)
+            {
+                allLines.Add(new ResultLine(
+                    lineResult.Key.lineNumber,
+                    GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(),
+                    lineResult.Key.filename
+                ));
+            }
+            ResultLineItems.Reset(allLines);
+            txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
+        }
+
+        private void copySelectedLines_Click(object sender, RoutedEventArgs e)
+        {
+            var stringBuilder = new StringBuilder();
+            foreach (var selectedItem in gridResultLines.SelectedItems)
+            {
+                if (selectedItem is ResultLine resultLine)
+                {
+                    if (chkShowAllLines.IsChecked == true && !string.IsNullOrEmpty(resultLine.File))
+                    {
+                        stringBuilder.AppendLine($"{resultLine.File}\t{resultLine.Line}\t{resultLine.Content}");
+                    }
+                    else
+                    {
+                        stringBuilder.AppendLine($"{resultLine.Line}\t{resultLine.Content}");
+                    }
+                }
+            }
+            if (stringBuilder.Length > 0)
+            {
+                Clipboard.SetText(stringBuilder.ToString());
+            }
+        }
+
+        private void copyAllLines_Click(object sender, RoutedEventArgs e)
+        {
+            var stringBuilder = new StringBuilder();
+            foreach (var item in ResultLineItems)
+            {
+                if (chkShowAllLines.IsChecked == true && !string.IsNullOrEmpty(item.File))
+                {
+                    stringBuilder.AppendLine($"{item.File}\t{item.Line}\t{item.Content}");
+                }
+                else
+                {
+                    stringBuilder.AppendLine($"{item.Line}\t{item.Content}");
+                }
+            }
+            if (stringBuilder.Length > 0)
+            {
+                Clipboard.SetText(stringBuilder.ToString());
+            }
+        }
+
+        private void exportAllLinesToCsv_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog()
+            {
+                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+                FileName = "search_results.csv"
+            };
+
+            if (dialog.ShowDialog(this) == true)
+            {
+                try
+                {
+                    using var writer = new StreamWriter(dialog.FileName, false, Encoding.UTF8);
+                    
+                    if (chkShowAllLines.IsChecked == true)
+                    {
+                        writer.WriteLine("Archivo,Línea,Contenido");
+                    }
+                    else
+                    {
+                        writer.WriteLine("Línea,Contenido");
+                    }
+
+                    foreach (var item in ResultLineItems)
+                    {
+                        string escapedContent = item.Content.Replace("\"", "\"\"");
+                        if (chkShowAllLines.IsChecked == true)
+                        {
+                            string escapedFile = item.File.Replace("\"", "\"\"");
+                            writer.WriteLine($"\"{escapFile}\",{item.Line},\"{escapedContent}\"");
+                        }
+                        else
+                        {
+                            writer.WriteLine($"{item.Line},\"{escapedContent}\"");
+                        }
+                    }
+                    MessageBox.Show("Resultados exportados con éxito.", "Exportar");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error al exportar: " + ex.Message, "Error");
+                }
             }
         }
 
