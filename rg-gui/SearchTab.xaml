@@ -157,7 +157,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn x:Name="colFile" Header="File" Binding="{Binding File, Mode=OneWay}" Visibility="Collapsed" Width="150"/>
                     <DataGridTextColumn Header="Line" Binding="{Binding Line, Mode=OneWay}" SortDirection="Ascending" Width="60"/>
-                    <DataGridTemplateColumn Header="Content" SortMemberPath="Line" Width="*">
+                    <DataGridTemplateColumn Header="Content" SortMemberPath="Line" Width="Auto" MinWidth="500">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <local:SelectableTextBlock local:TextBlockFormatter.Text="{Binding Path=Content, Mode=OneWay}" />
