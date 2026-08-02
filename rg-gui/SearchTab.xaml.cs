@@ -980,6 +980,7 @@ namespace rg_gui
                 MaxSearchTerms = MainWindow.MaxSearchTerms,
                 Multicolor = MainWindow.MultipleHighlightColors,
                 MaxLineHighlights = MainWindow.MaxLineHighlights,
+                MaxParallelProcesses = MainWindow.MaxParallelProcesses,
                 FileViewerPath = MainWindow.FileViewerPath,
                 FileViewerArgs = MainWindow.FileViewerArgs
             };
@@ -991,6 +992,7 @@ namespace rg_gui
                 MainWindow.MaxSearchTerms = settingsWindow.MaxSearchTerms;
                 MainWindow.MultipleHighlightColors = settingsWindow.Multicolor;
                 MainWindow.MaxLineHighlights = settingsWindow.MaxLineHighlights;
+                MainWindow.MaxParallelProcesses = settingsWindow.MaxParallelProcesses;
                 MainWindow.FileViewerPath = settingsWindow.FileViewerPath;
                 MainWindow.FileViewerArgs = settingsWindow.FileViewerArgs;
 

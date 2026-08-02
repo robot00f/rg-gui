@@ -241,41 +241,13 @@ namespace rg_gui
 
         public async Task Search(SearchParameters searchParameters, CancellationToken cancellationToken)
         {
-            var searchTasks = new List<Task>();
             m_searchTermCount = searchParameters.SearchStrings.Count();
-
-            // Limit concurrent processes to at most 10 to avoid system starvation
-            using var semaphore = new SemaphoreSlim(10);
-
-            for (var i = 0; i < m_searchTermCount; i++)
-            {
-                var termIndex = i;
-                searchTasks.Add(Task.Run(async () =>
-                {
-                    await semaphore.WaitAsync(cancellationToken);
-                    try
-                    {
-                        await Search(searchParameters, cancellationToken, termIndex);
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, cancellationToken));
-            }
-
-            await Task.WhenAll(searchTasks);
-        }
-
-        private async Task Search(SearchParameters searchParameters, CancellationToken cancellationToken, int termIndex)
-        {
-            const string fieldMatchSeparator = "\t";
-
-            if (string.IsNullOrWhiteSpace(searchParameters.StartPath))
+            if (m_searchTermCount == 0 || string.IsNullOrWhiteSpace(searchParameters.StartPath))
             {
                 return;
             }
 
+            const string fieldMatchSeparator = "\t";
             var argsBuilder = new StringBuilder();
             argsBuilder.Append("-uu ");
             argsBuilder.Append("--no-heading ");
@@ -328,17 +300,21 @@ namespace rg_gui
                 argsBuilder.Append($"--max-filesize {searchParameters.MaxFileSize}{(searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.B ? searchParameters.MaxFileSizeUnit : string.Empty)} ");
             }
 
-            // Signal no more flags will be set.
-            argsBuilder.Append("-- ");
-
-            var searchString = searchParameters.SearchStrings.ElementAt(termIndex);
-
-            if (!string.IsNullOrWhiteSpace(searchString))
+            // Append all search terms as individual -e arguments
+            var terms = searchParameters.SearchStrings.ToList();
+            foreach (var term in terms)
             {
-                argsBuilder.Append(searchString);
-                argsBuilder.Append(' ');
+                if (!string.IsNullOrWhiteSpace(term))
+                {
+                    // Escape term for argument structure if necessary, or just use -e
+                    argsBuilder.Append("-e ");
+                    argsBuilder.Append(term);
+                    argsBuilder.Append(' ');
+                }
             }
 
+            // Signal no more flags will be set.
+            argsBuilder.Append("-- ");
             argsBuilder.Append($"\"{searchParameters.StartPath}\"");
 
             var cmd = Cli.Wrap(m_ripGrepPath)
@@ -370,27 +346,54 @@ namespace rg_gui
 
                                     if (!string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(filename))
                                     {
-                                        if (!FilesFound.Contains((path, filename, termIndex)))
+                                        var cleanLineContent = RemoveAnsiColors(result[2]);
+
+                                        // Find which of our search terms matched this line
+                                        var termMatches = new List<TermResult>();
+                                        for (int t = 0; t < terms.Count; t++)
                                         {
-                                            FilesFound.Add((path, filename, termIndex));
-                                            if (FilesFound.Count(x => x.path == path && x.filename == filename) == m_searchTermCount)
+                                            var termMatchesForThisTerm = GetTermMatches(result[2], cleanLineContent, terms[t], t, searchParameters.IgnoreCase, searchParameters.RegularExpression);
+                                            if (termMatchesForThisTerm.Count > 0)
                                             {
-                                                RaiseFileFound(path, filename);
+                                                termMatches.AddRange(termMatchesForThisTerm);
+                                                if (!FilesFound.Contains((path, filename, t)))
+                                                {
+                                                    FilesFound.Add((path, filename, t));
+                                                }
                                             }
                                         }
 
-                                        if (!FileResults.ContainsKey((path, filename, lineNumber)))
+                                        if (termMatches.Count > 0)
                                         {
-                                            FileResults.GetOrAdd((path, filename, lineNumber), new LineResult(RemoveAnsiColors(result[2])));
-                                        }
+                                            // Raise file found event if all unique terms have been found across files, or simply notify on file first discovery
+                                            // Let's trigger file found immediately if it's the first time we see this file
+                                            if (FilesFound.Count(x => x.path == path && x.filename == filename) > 0)
+                                            {
+                                                // Check how many unique term indexes have been found for this file
+                                                var uniqueTermCountForFile = FilesFound.Where(x => x.path == path && x.filename == filename).Select(x => x.termIndex).Distinct().Count();
+                                                if (uniqueTermCountForFile == m_searchTermCount)
+                                                {
+                                                    RaiseFileFound(path, filename);
+                                                }
+                                                else
+                                                {
+                                                    // Also notify immediately for user feedback
+                                                    RaiseFileFound(path, filename);
+                                                }
+                                            }
 
-                                        var termMatches = GetTermMatches(result[2], termIndex);
-                                        foreach (var termMatch in termMatches)
-                                        {
-                                            FileResults[(path, filename, lineNumber)].TermResults.Add(termMatch);
-                                        }
+                                            if (!FileResults.ContainsKey((path, filename, lineNumber)))
+                                            {
+                                                FileResults.GetOrAdd((path, filename, lineNumber), new LineResult(cleanLineContent));
+                                            }
 
-                                        RaiseLineFound(path, filename, lineNumber, RemoveAnsiColors(result[2]), termMatches);
+                                            foreach (var termMatch in termMatches)
+                                            {
+                                                FileResults[(path, filename, lineNumber)].TermResults.Add(termMatch);
+                                            }
+
+                                            RaiseLineFound(path, filename, lineNumber, cleanLineContent, termMatches);
+                                        }
                                     }
                                 }
                             }
@@ -449,25 +452,48 @@ namespace rg_gui
             return Regex.Replace(source, @"\x1B\[[^@-~]*[@-~]", string.Empty);
         }
 
-        private static IList<TermResult> GetTermMatches(string source, int termIndex)
+        private static IList<TermResult> GetTermMatches(string coloredSource, string cleanSource, string term, int termIndex, bool ignoreCase, bool isRegex)
         {
-            var ripGrepMatches = Regex.Matches(source, @"\x1B\[0m\x1B\[1m\x1B\[31m(.+?)\x1B\[0m");
-
             var termMatches = new List<TermResult>();
+            if (string.IsNullOrEmpty(term) || string.IsNullOrEmpty(cleanSource)) return termMatches;
 
-            var processIndex = 0;
-            var originalStringIndex = 0;
-            for (var i = 0; i < ripGrepMatches.Count; i++)
+            // Strip quotes from the search term if it was quoted
+            var cleanTerm = term;
+            if (cleanTerm.StartsWith("\"") && cleanTerm.EndsWith("\"") && cleanTerm.Length >= 2)
             {
-                if (processIndex != ripGrepMatches[i].Groups[0].Index)
+                cleanTerm = cleanTerm.Substring(1, cleanTerm.Length - 2);
+            }
+
+            if (string.IsNullOrEmpty(cleanTerm)) return termMatches;
+
+            try
+            {
+                // We use regex to find where the cleanTerm matches in cleanSource (plain text)
+                string pattern = isRegex ? cleanTerm : Regex.Escape(cleanTerm);
+                var options = ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None;
+
+                // Protect against invalid regex input crashes by catching compilation exceptions locally
+                Regex regex;
+                try
                 {
-                    originalStringIndex += (ripGrepMatches[i].Groups[0].Index - processIndex);
+                    regex = new Regex(pattern, options);
+                }
+                catch (ArgumentException)
+                {
+                    // Fallback to literal search if regex compilation fails
+                    pattern = Regex.Escape(cleanTerm);
+                    regex = new Regex(pattern, options);
                 }
 
-                var start = originalStringIndex;
-                originalStringIndex += ripGrepMatches[i].Groups[1].Value.Length;
-                termMatches.Add(new TermResult(start, originalStringIndex - 1, termIndex));
-                processIndex = ripGrepMatches[i].Index + ripGrepMatches[i].Length;
+                var matches = regex.Matches(cleanSource);
+                foreach (Match m in matches)
+                {
+                    termMatches.Add(new TermResult(m.Index, m.Index + m.Length - 1, termIndex));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed matching terms: {ex.Message}");
             }
 
             return termMatches;

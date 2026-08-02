@@ -18,6 +18,7 @@ namespace rg_gui
         public int MaxSearchTerms { get; set; }
         public bool Multicolor { get; set; }
         public int MaxLineHighlights { get; set; }
+        public int MaxParallelProcesses { get; set; }
 
         private string _fileViewerPath;
 
@@ -55,6 +56,12 @@ namespace rg_gui
             if (MaxSearchTerms < 1)
             {
                 MessageBox.Show("Maximum search terms must be at least 1.");
+                return;
+            }
+
+            if (MaxParallelProcesses < 1)
+            {
+                MessageBox.Show("Maximum parallel processes must be at least 1.");
                 return;
             }
 
@@ -103,6 +110,12 @@ namespace rg_gui
         {
             var input = txtMaxLineHighlights.Text;
             txtMaxLineHighlights.Text = new string(input.Where(c => char.IsDigit(c)).ToArray());
+        }
+
+        private void txtMaxParallelProcesses_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var input = txtMaxParallelProcesses.Text;
+            txtMaxParallelProcesses.Text = new string(input.Where(c => char.IsDigit(c)).ToArray());
         }
 
         private string[] GetRegistryList(Microsoft.Win32.RegistryKey mainKey, Microsoft.Win32.RegistryKey? profileKey, string profileValueName, string[] mainFallbackNames)

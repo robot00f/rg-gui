@@ -25,6 +25,7 @@ namespace rg_gui
         public const int DEFAULT_MAXSEARCHTERMS = 10;
         public const bool DEFAULT_MULTIPLEHIGHLIGHTCOLORS = true;
         public const int DEFAULT_MAXLINEHIGHLIGHTS = 100;
+        public const int DEFAULT_MAXPARALLELPROCESSES = 10;
         public const ThemeType DEFAULT_THEME = ThemeType.Dark;
 
         // Global static settings accessible by all search tabs
@@ -33,6 +34,7 @@ namespace rg_gui
         public static int MaxSearchTerms { get; set; } = DEFAULT_MAXSEARCHTERMS;
         public static bool MultipleHighlightColors { get; set; } = DEFAULT_MULTIPLEHIGHLIGHTCOLORS;
         public static int MaxLineHighlights { get; set; } = DEFAULT_MAXLINEHIGHLIGHTS;
+        public static int MaxParallelProcesses { get; set; } = DEFAULT_MAXPARALLELPROCESSES;
         
         private static ThemeType m_currentTheme = DEFAULT_THEME;
         public static ThemeType CurrentTheme
@@ -57,6 +59,7 @@ namespace rg_gui
             MaxSearchTerms = int.TryParse(config.AppSettings.Settings["MaxSearchTerms"]?.Value, out var maxSearchTerms) ? maxSearchTerms : DEFAULT_MAXSEARCHTERMS;
             MultipleHighlightColors = bool.TryParse(config.AppSettings.Settings["MultipleHighlightColors"]?.Value, out var multipleHighlightColors) ? multipleHighlightColors : DEFAULT_MULTIPLEHIGHLIGHTCOLORS;
             MaxLineHighlights = int.TryParse(config.AppSettings.Settings["MaxLineHighlights"]?.Value, out var maxLineHighlights) ? maxLineHighlights : DEFAULT_MAXLINEHIGHLIGHTS;
+            MaxParallelProcesses = int.TryParse(config.AppSettings.Settings["MaxParallelProcesses"]?.Value, out var maxParallelProcesses) ? maxParallelProcesses : DEFAULT_MAXPARALLELPROCESSES;
 
             FileViewerPath = config.AppSettings.Settings["FileViewerPath"]?.Value ?? string.Empty;
             FileViewerArgs = config.AppSettings.Settings["FileViewerArgs"]?.Value ?? string.Empty;
@@ -205,6 +208,7 @@ namespace rg_gui
             SetConfigValue(config, "MultipleHighlightColors", MultipleHighlightColors.ToString());
             SetConfigValue(config, "MaxLineHighlights", MaxLineHighlights.ToString());
             SetConfigValue(config, "MaxSearchTerms", MaxSearchTerms.ToString());
+            SetConfigValue(config, "MaxParallelProcesses", MaxParallelProcesses.ToString());
             SetConfigValue(config, "FileViewerPath", FileViewerPath);
             SetConfigValue(config, "FileViewerArgs", FileViewerArgs);
         }
