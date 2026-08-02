@@ -242,12 +242,26 @@ namespace rg_gui
         public async Task Search(SearchParameters searchParameters, CancellationToken cancellationToken)
         {
             var searchTasks = new List<Task>();
-
             m_searchTermCount = searchParameters.SearchStrings.Count();
+
+            // Limit concurrent processes to at most 10 to avoid system starvation
+            using var semaphore = new SemaphoreSlim(10);
 
             for (var i = 0; i < m_searchTermCount; i++)
             {
-                searchTasks.Add(Search(searchParameters, cancellationToken, i));
+                var termIndex = i;
+                searchTasks.Add(Task.Run(async () =>
+                {
+                    await semaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        await Search(searchParameters, cancellationToken, termIndex);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken));
             }
 
             await Task.WhenAll(searchTasks);
