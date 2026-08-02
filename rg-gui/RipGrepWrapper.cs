@@ -358,28 +358,34 @@ namespace rg_gui
                                                 termMatches.AddRange(termMatchesForThisTerm);
                                                 if (!FilesFound.Contains((path, filename, t)))
                                                 {
-                                                    FilesFound.Add((path, filename, t));
+                                                    // Intentionally empty: tracked inside lock (FilesFound) below
                                                 }
                                             }
                                         }
 
                                         if (termMatches.Count > 0)
                                         {
-                                            // Raise file found event if all unique terms have been found across files, or simply notify on file first discovery
-                                            // Let's trigger file found immediately if it's the first time we see this file
-                                            if (FilesFound.Count(x => x.path == path && x.filename == filename) > 0)
+                                            // Trigger file found event once per unique file
+                                            bool isFirstDiscovery = false;
+                                            lock (FilesFound)
                                             {
-                                                // Check how many unique term indexes have been found for this file
-                                                var uniqueTermCountForFile = FilesFound.Where(x => x.path == path && x.filename == filename).Select(x => x.termIndex).Distinct().Count();
-                                                if (uniqueTermCountForFile == m_searchTermCount)
+                                                if (!FilesFound.Any(x => x.path == path && x.filename == filename))
                                                 {
-                                                    RaiseFileFound(path, filename);
+                                                    isFirstDiscovery = true;
                                                 }
-                                                else
+
+                                                foreach (var termMatch in termMatches)
                                                 {
-                                                    // Also notify immediately for user feedback
-                                                    RaiseFileFound(path, filename);
+                                                    if (!FilesFound.Contains((path, filename, termMatch.TermIndex)))
+                                                    {
+                                                        FilesFound.Add((path, filename, termMatch.TermIndex));
+                                                    }
                                                 }
+                                            }
+
+                                            if (isFirstDiscovery)
+                                            {
+                                                RaiseFileFound(path, filename);
                                             }
 
                                             if (!FileResults.ContainsKey((path, filename, lineNumber)))
