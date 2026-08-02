@@ -51,8 +51,10 @@ namespace rg_gui
 
         public MainWindow(string? basePath, string? includeFiles, string? excludeFiles, string? containingText)
         {
-            // Load global configurations first (before InitializeComponent!)
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            // Configure local portable configuration file path (rg-gui.config in the executable folder)
+            var exePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+            var fileMap = new ExeConfigurationFileMap { ExeConfigFilename = exePath };
+            var config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
             
             CurrentTheme = Enum.TryParse<ThemeType>(config.AppSettings.Settings["Theme"]?.Value, true, out var themeName) ? themeName : DEFAULT_THEME;
             
@@ -224,7 +226,10 @@ namespace rg_gui
                 }
             }
 
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            var exePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+            var fileMap = new ExeConfigurationFileMap { ExeConfigFilename = exePath };
+            var config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
+
             if (WindowState != WindowState.Minimized)
             {
                 SetConfigValue(config, "MainWindowLeft", Left.ToString());

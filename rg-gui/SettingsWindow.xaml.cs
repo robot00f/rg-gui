@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Configuration;
 
 namespace rg_gui
 {
@@ -179,7 +180,9 @@ namespace rg_gui
                 }
 
                 // 2. Load and write all history list values to application config
-                var config = System.Configuration.ConfigurationManager.OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.None);
+                var exePathConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+                var fileMapConfig = new ExeConfigurationFileMap { ExeConfigFilename = exePathConfig };
+                var config = System.Configuration.ConfigurationManager.OpenMappedExeConfiguration(fileMapConfig, System.Configuration.ConfigurationUserLevel.None);
 
                 var profileName = mainKey.GetValue("DefaultProfile") as string ?? "DefaultProfile";
                 using var profileKey = mainKey.OpenSubKey(profileName == "DefaultProfile" ? "DefaultProfile" : $@"Profiles\{profileName}");

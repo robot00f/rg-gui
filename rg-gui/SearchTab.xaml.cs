@@ -52,8 +52,10 @@ namespace rg_gui
             m_ripGrepWrapper.FileFound += OnFileAdded;
             m_ripGrepWrapper.LineFound += OnLineFound;
 
-            // Load initial config values
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            // Load initial config values from local portable configuration file path
+            var exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+            var fileMap = new ExeConfigurationFileMap { ExeConfigFilename = exePath };
+            var config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
             chkCaseSensitive.IsChecked = bool.TryParse(config.AppSettings.Settings["CaseSensitive"]?.Value, out var caseSensitive) ? caseSensitive : MainWindow.DEFAULT_CASESENSITIVE;
             chkRecursive.IsChecked = bool.TryParse(config.AppSettings.Settings["Recursive"]?.Value, out var recursive) ? recursive : MainWindow.DEFAULT_RECURSIVE;
             chkRegularExpression.IsChecked = bool.TryParse(config.AppSettings.Settings["RegularExpression"]?.Value, out var regularExpression) ? regularExpression : MainWindow.DEFAULT_REGULAREXPRESSION;
@@ -118,7 +120,9 @@ namespace rg_gui
         {
             try
             {
-                var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+                var exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+                var fileMap = new ExeConfigurationFileMap { ExeConfigFilename = exePath };
+                var config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
                 var historyStr = config.AppSettings.Settings[configKey]?.Value;
                 var items = new List<string>();
 
@@ -546,8 +550,10 @@ namespace rg_gui
                 startPath = startPath.TrimEnd(Path.DirectorySeparatorChar);
             }
 
-            // Save history values
-            var exeConfig = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            // Save history values to local portable config
+            var exePathConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+            var fileMapConfig = new ExeConfigurationFileMap { ExeConfigFilename = exePathConfig };
+            var exeConfig = ConfigurationManager.OpenMappedExeConfiguration(fileMapConfig, ConfigurationUserLevel.None);
             SaveHistory(exeConfig, cmbBasePath, "HistoryBasePath");
             SaveHistory(exeConfig, cmbIncludeFiles, "HistoryIncludeFiles");
             SaveHistory(exeConfig, cmbExcludeFiles, "HistoryExcludeFiles");
@@ -996,7 +1002,9 @@ namespace rg_gui
                 MainWindow.FileViewerPath = settingsWindow.FileViewerPath;
                 MainWindow.FileViewerArgs = settingsWindow.FileViewerArgs;
 
-                var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+                var exePathConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+                var fileMapConfig = new ExeConfigurationFileMap { ExeConfigFilename = exePathConfig };
+                var config = ConfigurationManager.OpenMappedExeConfiguration(fileMapConfig, ConfigurationUserLevel.None);
                 MainWindow.SaveGlobalConfig(config);
                 try
                 {
