@@ -225,9 +225,9 @@ namespace rg_gui
             MainWindow.SetConfigValue(config, "Recursive", (chkRecursive.IsChecked ?? MainWindow.DEFAULT_RECURSIVE).ToString());
             MainWindow.SetConfigValue(config, "RegularExpression", (chkRegularExpression.IsChecked ?? MainWindow.DEFAULT_REGULAREXPRESSION).ToString());
 
-            MainWindow.SetConfigValue(config, "FileEncoding", ((ComboBoxItem)cmbEncoding.SelectedItem).Name);
+            MainWindow.SetConfigValue(config, "FileEncoding", (cmbEncoding.SelectedItem as ComboBoxItem)?.Name ?? MainWindow.DEFAULT_FILEENCODING);
             MainWindow.SetConfigValue(config, "MaxFileSize", txtMaxFileSize.Text);
-            MainWindow.SetConfigValue(config, "MaxFileSizeUnit", ((ComboBoxItem)cmbFileSizeUnit.SelectedItem).Name);
+            MainWindow.SetConfigValue(config, "MaxFileSizeUnit", (cmbFileSizeUnit.SelectedItem as ComboBoxItem)?.Name ?? MainWindow.DEFAULT_MAXFILESIZEUNIT);
 
             SaveHistory(config, cmbBasePath, "HistoryBasePath");
             SaveHistory(config, cmbIncludeFiles, "HistoryIncludeFiles");
@@ -253,7 +253,9 @@ namespace rg_gui
                             {
                                 MainWindow.FileViewerArgs = "\"$FILE\"";
                             }
-                            var localConfig = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+                            var exePathConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+                            var fileMapConfig = new ExeConfigurationFileMap { ExeConfigFilename = exePathConfig };
+                            var localConfig = ConfigurationManager.OpenMappedExeConfiguration(fileMapConfig, ConfigurationUserLevel.None);
                             MainWindow.SetConfigValue(localConfig, "FileViewerPath", openWithExe);
                             MainWindow.SetConfigValue(localConfig, "FileViewerArgs", MainWindow.FileViewerArgs);
                             try { localConfig.Save(); } catch {}
