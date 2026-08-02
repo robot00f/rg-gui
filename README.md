@@ -7,12 +7,14 @@
 
 ## Features
 
+* **Ultra-Fast Unified Search Engine**: Efficiently executes multi-term searches (like bulk email lists) using a single, unified `rg.exe` process in memory without system freezing or spawning excessive background processes.
+* **100% Portable Configuration (`rg-gui.config`)**: All application settings, active visual themes, window geometries, and search history entries are saved in a local `rg-gui.config` file right next to `rg-gui.exe`.
+* **Configurable Parallel Process Limiter**: Set maximum concurrent search threads directly from the Settings window with resource usage recommendations.
 * **Multi-Tab Interface**: Run multiple independent search sessions concurrently. Easily spawn new tabs using the `+` tab and close active tabs with close buttons.
 * **Dropdown History Autocomplete**: Dropdown history comboboxes for search inputs ("In Folder", "Include Files", "Exclude Files", "Containing Text") to quickly select from previous search entries.
 * **FileSeek Settings & History Importer**: Easily import search configurations, history paths (`PathHistory`, `QueryHistory`, `IncludeHistory`, `ExcludeHistory`), and custom editors (`OpenWithLastExeSelected`) from FileSeek Pro registry profiles directly into the Settings window.
 * **Horizontal Scrollable Results**: Columns for matched lines in the results grid support horizontal scrolling, enabling you to read long lines without maximizing the window.
-* **Persistent Settings & Theme**: Selected visual themes (Light/Dark) and window layouts persist automatically on restart.
-* **Always-Enabled Settings**: Modify highlighting options, active themes, and file viewer paths even while a search is running.
+* **Robust Multi-Color Highlighting & Anti-Crash**: Thread-safe UI rendering and automatic fallback handling for large search term batches and invalid regex inputs.
 
 ## Installation
 
