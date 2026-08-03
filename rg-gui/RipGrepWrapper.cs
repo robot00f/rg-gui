@@ -248,77 +248,79 @@ namespace rg_gui
             }
 
             const string fieldMatchSeparator = "\t";
-            var argsBuilder = new StringBuilder();
-            argsBuilder.Append("-uu ");
-            argsBuilder.Append("--no-heading ");
-            argsBuilder.Append("--line-number ");
-            argsBuilder.Append($"--field-match-separator=\"{fieldMatchSeparator}\" ");
-
-            if (searchParameters.IgnoreCase)
-            {
-                argsBuilder.Append("-i ");
-            }
-
-            if (searchParameters.IncludeHiddenFiles)
-            {
-                argsBuilder.Append("--hidden ");
-            }
-
-            if (!searchParameters.Recursive)
-            {
-                argsBuilder.Append("--max-depth=1 ");
-            }
-
-            if (!searchParameters.RegularExpression)
-            {
-                argsBuilder.Append("--fixed-strings ");
-            }
-
-            if (!string.IsNullOrWhiteSpace(searchParameters.IncludePatterns))
-            {
-                argsBuilder.Append("--iglob={");
-                argsBuilder.AppendJoin(",", GetSearchPatterns(searchParameters.IncludePatterns));
-                argsBuilder.Append("} ");
-            }
-
-            if (searchParameters.ExcludePatterns.Any())
-            {
-                argsBuilder.Append("--iglob=!{");
-                argsBuilder.AppendJoin(",", GetSearchPatterns(searchParameters.ExcludePatterns));
-                argsBuilder.Append("} ");
-            }
-
-            argsBuilder.Append("--color always ");
-
-            if (searchParameters.Encoding != FileEncoding.Auto)
-            {
-                argsBuilder.Append($"-E {EncodingTypes[searchParameters.Encoding]} ");
-            }
-
-            if (searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.None)
-            {
-                argsBuilder.Append($"--max-filesize {searchParameters.MaxFileSize}{(searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.B ? searchParameters.MaxFileSizeUnit : string.Empty)} ");
-            }
-
-            // Append all search terms as individual -e arguments
-            var terms = searchParameters.SearchStrings.ToList();
-            foreach (var term in terms)
-            {
-                if (!string.IsNullOrWhiteSpace(term))
-                {
-                    // Escape term for argument structure if necessary, or just use -e
-                    argsBuilder.Append("-e ");
-                    argsBuilder.Append(term);
-                    argsBuilder.Append(' ');
-                }
-            }
-
-            // Signal no more flags will be set.
-            argsBuilder.Append("-- ");
-            argsBuilder.Append($"\"{searchParameters.StartPath}\"");
+            var terms = searchParameters.SearchStrings.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            if (terms.Count == 0) return;
 
             var cmd = Cli.Wrap(m_ripGrepPath)
-                .WithArguments(argsBuilder.ToString())
+                .WithArguments(args =>
+                {
+                    args.Add("-uu");
+                    args.Add("--no-heading");
+                    args.Add("--line-number");
+                    args.Add($"--field-match-separator={fieldMatchSeparator}");
+
+                    if (searchParameters.IgnoreCase)
+                    {
+                        args.Add("-i");
+                    }
+
+                    if (searchParameters.IncludeHiddenFiles)
+                    {
+                        args.Add("--hidden");
+                    }
+
+                    if (!searchParameters.Recursive)
+                    {
+                        args.Add("--max-depth=1");
+                    }
+
+                    if (!searchParameters.RegularExpression)
+                    {
+                        args.Add("--fixed-strings");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(searchParameters.IncludePatterns))
+                    {
+                        var inc = GetSearchPatterns(searchParameters.IncludePatterns).ToList();
+                        if (inc.Count > 0)
+                        {
+                            args.Add($"--iglob={{{string.Join(",", inc)}}}");
+                        }
+                    }
+
+                    if (searchParameters.ExcludePatterns.Any())
+                    {
+                        var exc = GetSearchPatterns(searchParameters.ExcludePatterns).ToList();
+                        if (exc.Count > 0)
+                        {
+                            args.Add($"--iglob=!{{{string.Join(",", exc)}}}");
+                        }
+                    }
+
+                    args.Add("--color");
+                    args.Add("always");
+
+                    if (searchParameters.Encoding != FileEncoding.Auto)
+                    {
+                        args.Add("-E");
+                        args.Add(EncodingTypes[searchParameters.Encoding]);
+                    }
+
+                    if (searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.None)
+                    {
+                        args.Add("--max-filesize");
+                        args.Add($"{searchParameters.MaxFileSize}{(searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.B ? searchParameters.MaxFileSizeUnit : string.Empty)}");
+                    }
+
+                    foreach (var term in terms)
+                    {
+                        args.Add("-e");
+                        args.Add(term);
+                    }
+
+                    args.Add("--");
+                    args.Add(searchParameters.StartPath);
+                })
                 .WithValidation(CommandResultValidation.None);
 
             try
@@ -411,6 +413,14 @@ namespace rg_gui
             }
             catch (OperationCanceledException)
             {
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Debug.WriteLine($"Win32Exception while launching rg.exe: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Exception in RipGrep search execution: {ex.Message}");
             }
         }
 
