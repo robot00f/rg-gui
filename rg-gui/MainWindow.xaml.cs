@@ -19,6 +19,7 @@ namespace rg_gui
         public const bool DEFAULT_CASESENSITIVE = false;
         public const bool DEFAULT_RECURSIVE = true;
         public const bool DEFAULT_REGULAREXPRESSION = false;
+        public const bool DEFAULT_SHOWALLLINES = false;
         public const string DEFAULT_FILEENCODING = "Auto";
         public const int DEFAULT_MAXFILESIZE = 0;
         public const string DEFAULT_MAXFILESIZEUNIT = "None";
@@ -81,6 +82,8 @@ namespace rg_gui
 
         private void tabControlSearches_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (e.Source != tabControlSearches) return;
+
             if (tabControlSearches.SelectedItem == plusTab)
             {
                 AddNewTab($"Search {m_tabCounter++}");
@@ -241,15 +244,32 @@ namespace rg_gui
 
             SaveGlobalConfig(config);
 
-            // Save the settings from the active search tab
-            if (tabControlSearches.SelectedItem is TabItem activeTab && activeTab.Content is SearchTab searchTab)
+            // Save the settings from the currently selected search tab or any open search tab
+            SearchTab? searchTabToSave = null;
+            if (tabControlSearches.SelectedItem is TabItem activeTab && activeTab.Content is SearchTab currentTab)
             {
-                searchTab.SaveTabConfig(config);
+                searchTabToSave = currentTab;
+            }
+            else
+            {
+                foreach (var item in tabControlSearches.Items)
+                {
+                    if (item is TabItem tab && tab.Content is SearchTab sTab)
+                    {
+                        searchTabToSave = sTab;
+                        break;
+                    }
+                }
+            }
+
+            if (searchTabToSave != null)
+            {
+                searchTabToSave.SaveTabConfig(config);
             }
 
             try
             {
-                config.Save();
+                config.Save(ConfigurationSaveMode.Modified, true);
                 ConfigurationManager.RefreshSection("appSettings");
             }
             catch (Exception ex)

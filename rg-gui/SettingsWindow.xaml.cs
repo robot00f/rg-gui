@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Configuration;
+using FramePFX.Themes;
 
 namespace rg_gui
 {
@@ -52,33 +53,108 @@ namespace rg_gui
             DataContext = this;
         }
 
-        private void btnOK_Click(object sender, RoutedEventArgs e)
+        private bool ValidateInputs()
         {
-            if (MaxSearchTerms < 1)
+            if (MaxSearchTerms < 0)
             {
-                MessageBox.Show("Maximum search terms must be at least 1.");
-                return;
+                MessageBox.Show("Maximum search terms must be a non-negative number.");
+                return false;
             }
 
             if (MaxParallelProcesses < 1)
             {
                 MessageBox.Show("Maximum parallel processes must be at least 1.");
-                return;
+                return false;
             }
 
             if (!string.IsNullOrEmpty(FileViewerPath) && !File.Exists(FileViewerPath))
             {
                 MessageBox.Show("Invalid file viewer path.");
-                return;
+                return false;
             }
 
             if (!string.IsNullOrEmpty(FileViewerArgs) && !FileViewerArgs.Contains("$FILE"))
             {
                 MessageBox.Show("Invalid file viewer arguments.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private Configuration? m_importedConfig = null;
+
+        private void btnOK_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ValidateInputs())
+            {
                 return;
             }
 
+            if (m_importedConfig != null)
+            {
+                try
+                {
+                    m_importedConfig.Save(ConfigurationSaveMode.Modified, true);
+                    ConfigurationManager.RefreshSection("appSettings");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to save imported configuration: {ex.Message}");
+                }
+            }
+
             this.DialogResult = true;
+        }
+
+        private void btnApply_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ValidateInputs())
+            {
+                return;
+            }
+
+            if (Enum.TryParse<ThemeType>(Theme, out var themeType))
+            {
+                MainWindow.CurrentTheme = themeType;
+            }
+
+            MainWindow.MaxSearchTerms = MaxSearchTerms;
+            MainWindow.MultipleHighlightColors = Multicolor;
+            MainWindow.MaxLineHighlights = MaxLineHighlights;
+            MainWindow.MaxParallelProcesses = MaxParallelProcesses;
+            MainWindow.FileViewerPath = FileViewerPath;
+            MainWindow.FileViewerArgs = FileViewerArgs;
+
+            if (m_importedConfig != null)
+            {
+                try
+                {
+                    m_importedConfig.Save(ConfigurationSaveMode.Modified, true);
+                    ConfigurationManager.RefreshSection("appSettings");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to save imported configuration: {ex.Message}");
+                }
+            }
+            else
+            {
+                var exePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
+                var fileMap = new ExeConfigurationFileMap { ExeConfigFilename = exePath };
+                var config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
+                MainWindow.SaveGlobalConfig(config);
+
+                try
+                {
+                    config.Save(ConfigurationSaveMode.Modified, true);
+                    ConfigurationManager.RefreshSection("appSettings");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to save configuration: {ex.Message}");
+                }
+            }
         }
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)
@@ -179,7 +255,7 @@ namespace rg_gui
                     }
                 }
 
-                // 2. Load and write all history list values to application config
+                // 2. Read registry profiles to local config file only on demand
                 var exePathConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rg-gui.config");
                 var fileMapConfig = new ExeConfigurationFileMap { ExeConfigFilename = exePathConfig };
                 var config = System.Configuration.ConfigurationManager.OpenMappedExeConfiguration(fileMapConfig, System.Configuration.ConfigurationUserLevel.None);
@@ -187,7 +263,6 @@ namespace rg_gui
                 var profileName = mainKey.GetValue("DefaultProfile") as string ?? "DefaultProfile";
                 using var profileKey = mainKey.OpenSubKey(profileName == "DefaultProfile" ? "DefaultProfile" : $@"Profiles\{profileName}");
                 
-                // Read base paths
                 var basePaths = GetRegistryList(mainKey, profileKey, "LastUsedPath", new[] { "PathHistory" });
                 if (basePaths.Length > 0)
                 {
@@ -195,7 +270,6 @@ namespace rg_gui
                     MainWindow.SetConfigValue(config, "BasePath", basePaths[0]);
                 }
 
-                // Read include files
                 var includeFiles = GetRegistryList(mainKey, profileKey, "LastUsedFilesInclude", new[] { "FilesIncludeHistory", "IncludeHistory" });
                 if (includeFiles.Length > 0)
                 {
@@ -203,7 +277,6 @@ namespace rg_gui
                     MainWindow.SetConfigValue(config, "IncludeFiles", includeFiles[0]);
                 }
 
-                // Read exclude files
                 var excludeFiles = GetRegistryList(mainKey, profileKey, "LastUsedFilesExclude", new[] { "FilesExcludeHistory", "ExcludeHistory" });
                 if (excludeFiles.Length > 0)
                 {
@@ -211,7 +284,6 @@ namespace rg_gui
                     MainWindow.SetConfigValue(config, "ExcludeFiles", excludeFiles[0]);
                 }
 
-                // Read containing texts
                 var queries = GetRegistryList(mainKey, profileKey, "LastUsedQuery", new[] { "QueryHistory" });
                 if (queries.Length > 0)
                 {
@@ -219,27 +291,25 @@ namespace rg_gui
                     MainWindow.SetConfigValue(config, "ContainingText", queries[0]);
                 }
 
-                // Options (recursiveness, casing, regex)
                 if (profileKey != null)
                 {
-                    var caseSens = profileKey.GetValue("CaseSensitive") as string;
-                    if (caseSens != null) MainWindow.SetConfigValue(config, "CaseSensitive", (caseSens == "1").ToString());
+                    var caseSens = profileKey.GetValue("CaseSensitive")?.ToString();
+                    if (caseSens != null) MainWindow.SetConfigValue(config, "CaseSensitive", (caseSens == "1" || caseSens.Equals("True", StringComparison.OrdinalIgnoreCase)).ToString());
 
-                    var subFolders = profileKey.GetValue("SearchSubFolders") as string;
-                    if (subFolders != null) MainWindow.SetConfigValue(config, "Recursive", (subFolders == "1").ToString());
+                    var subFolders = profileKey.GetValue("SearchSubFolders")?.ToString();
+                    if (subFolders != null) MainWindow.SetConfigValue(config, "Recursive", (subFolders == "1" || subFolders.Equals("True", StringComparison.OrdinalIgnoreCase)).ToString());
 
-                    var isRegex = profileKey.GetValue("IsQueryRegEx") as string;
-                    if (isRegex != null) MainWindow.SetConfigValue(config, "RegularExpression", (isRegex == "1").ToString());
+                    var isRegex = profileKey.GetValue("IsQueryRegEx")?.ToString();
+                    if (isRegex != null) MainWindow.SetConfigValue(config, "RegularExpression", (isRegex == "1" || isRegex.Equals("True", StringComparison.OrdinalIgnoreCase)).ToString());
                 }
 
-                try
-                {
-                    config.Save();
-                    System.Configuration.ConfigurationManager.RefreshSection("appSettings");
-                }
-                catch {}
+                if (!string.IsNullOrEmpty(FileViewerPath)) MainWindow.SetConfigValue(config, "FileViewerPath", FileViewerPath);
+                if (!string.IsNullOrEmpty(FileViewerArgs)) MainWindow.SetConfigValue(config, "FileViewerArgs", FileViewerArgs);
 
-                MessageBox.Show("FileSeek settings and search history imported successfully! Click OK on the settings window to apply.", "Import Successful", MessageBoxButton.OK, MessageBoxImage.Information);
+                // Hold imported config in memory instance (saved when clicking OK or Apply)
+                m_importedConfig = config;
+
+                MessageBox.Show("FileSeek settings and search history imported to staging! Click OK or Apply to finalize and save to disk.", "Import Successful", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

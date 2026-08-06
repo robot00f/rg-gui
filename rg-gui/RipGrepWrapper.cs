@@ -282,18 +282,21 @@ namespace rg_gui
                     if (!string.IsNullOrWhiteSpace(searchParameters.IncludePatterns))
                     {
                         var inc = GetSearchPatterns(searchParameters.IncludePatterns).ToList();
-                        if (inc.Count > 0)
+                        foreach (var p in inc)
                         {
-                            args.Add($"--iglob={{{string.Join(",", inc)}}}");
+                            if (p != "*" && p != "*.*")
+                            {
+                                args.Add($"--iglob={p}");
+                            }
                         }
                     }
 
                     if (searchParameters.ExcludePatterns.Any())
                     {
                         var exc = GetSearchPatterns(searchParameters.ExcludePatterns).ToList();
-                        if (exc.Count > 0)
+                        foreach (var p in exc)
                         {
-                            args.Add($"--iglob=!{{{string.Join(",", exc)}}}");
+                            args.Add($"--iglob=!{p}");
                         }
                     }
 
@@ -319,7 +322,43 @@ namespace rg_gui
                     }
 
                     args.Add("--");
-                    args.Add(searchParameters.StartPath);
+                    var rawPaths = searchParameters.StartPath?.Trim() ?? string.Empty;
+                    List<string> validPaths = new List<string>();
+
+                    if (Directory.Exists(rawPaths) || File.Exists(rawPaths))
+                    {
+                        validPaths.Add(rawPaths);
+                    }
+                    else
+                    {
+                        var matches = Regex.Matches(rawPaths, @"""[^""]+""|[A-Za-z]:\\[^;""|]+");
+                        foreach (Match m in matches)
+                        {
+                            var clean = m.Value.Trim(' ', '"');
+                            if (Directory.Exists(clean) || File.Exists(clean))
+                            {
+                                validPaths.Add(clean);
+                            }
+                        }
+
+                        if (validPaths.Count == 0)
+                        {
+                            var tokens = rawPaths.Split(new[] { ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var t in tokens)
+                            {
+                                var clean = t.Trim(' ', '"');
+                                if (Directory.Exists(clean) || File.Exists(clean))
+                                {
+                                    validPaths.Add(clean);
+                                }
+                            }
+                        }
+                    }
+
+                    foreach (var p in validPaths)
+                    {
+                        args.Add(p);
+                    }
                 })
                 .WithValidation(CommandResultValidation.None);
 
