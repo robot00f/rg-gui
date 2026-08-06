@@ -37,7 +37,9 @@ jobs:
         path: depends
 
     - name: Setup DotNet
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
 
     - name: Restore NuGet packages
       run: dotnet restore
@@ -53,6 +55,7 @@ jobs:
         powershell Compress-Archive ${{ github.workspace }}\README.md,${{ github.workspace }}\LICENSE,${{ github.workspace }}\publish\*.exe,${{ github.workspace }}\publish\*.config,${{ github.workspace }}\depends\ripgrep\rg.exe ${{ github.workspace }}\rg-gui-${{ github.ref_name }}.zip
 
     - name: Release
-      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
       with:
         files: rg-gui-${{ github.ref_name }}.zip
