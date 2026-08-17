@@ -116,6 +116,7 @@
                 <ComboBoxItem Content="+5 lines" Tag="5"/>
                 <ComboBoxItem Content="+10 lines" Tag="10"/>
             </ComboBox>
+            <CheckBox Grid.Row="1" Grid.Column="11" Margin="15,0,0,5" x:Name="chkComboMode" Content="Combo Mode (URL:USER:PASS)" Checked="chkComboMode_Changed" Unchecked="chkComboMode_Changed" VerticalContentAlignment="Center" ToolTip="Automatically merges URL, USER, and PASS lines into a single URL:USER:PASS combo line"/>
         </Grid>
 
         <Grid Grid.Row="2" x:Name="gridResults">
@@ -149,12 +150,16 @@
                         <MenuItem Header="Open in File Viewer" Click="openInFileViewer_Click" InputGestureText="F3 / Double-Click"/>
                         <MenuItem Header="Open Containing Folder" Click="openContainingFolder_Click" InputGestureText="Ctrl+E"/>
                         <Separator />
-                        <MenuItem Header="Select All" Click="selectAllLines_Click" InputGestureText="Ctrl+A"/>
-                        <Separator />
                         <MenuItem Header="Copy Selected Lines" Click="copySelectedLines_Click" InputGestureText="Ctrl+C"/>
                         <MenuItem Header="Copy All Lines" Click="copyAllLines_Click"/>
                         <Separator />
+                        <MenuItem Header="Copy Selected as Combo (URL:USER:PASS)" Click="copySelectedAsCombo_Click" InputGestureText="Ctrl+Shift+C"/>
+                        <MenuItem Header="Copy All as Combo (URL:USER:PASS)" Click="copyAllAsCombo_Click"/>
+                        <Separator />
+                        <MenuItem Header="Select All" Click="selectAllLines_Click" InputGestureText="Ctrl+A"/>
+                        <Separator />
                         <MenuItem Header="Export All Lines to CSV..." Click="exportAllLinesToCsv_Click"/>
+                        <MenuItem Header="Export Combos to TXT..." Click="exportCombosToTxt_Click"/>
                     </ContextMenu>
                 </DataGrid.Resources>
                 <DataGrid.RowStyle>

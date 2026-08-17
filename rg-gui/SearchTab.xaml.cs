@@ -85,6 +85,8 @@ namespace rg_gui
             var contextLines = int.TryParse(config.AppSettings.Settings["ContextLines"]?.Value, out var cLines) ? cLines : 0;
             SetContextLines(contextLines);
 
+            chkComboMode.IsChecked = bool.TryParse(config.AppSettings.Settings["ComboMode"]?.Value, out var comboMode) ? comboMode : false;
+
             // 1. Load history lists (sets selection to default first item)
             LoadHistory(cmbBasePath, "HistoryBasePath");
             LoadHistory(cmbIncludeFiles, "HistoryIncludeFiles", new[] { "*.*" });
@@ -279,6 +281,7 @@ namespace rg_gui
             MainWindow.SetConfigValue(config, "MaxFileSize", txtMaxFileSize.Text);
             MainWindow.SetConfigValue(config, "MaxFileSizeUnit", (cmbFileSizeUnit.SelectedItem as ComboBoxItem)?.Name ?? MainWindow.DEFAULT_MAXFILESIZEUNIT);
             MainWindow.SetConfigValue(config, "ContextLines", GetContextLines().ToString());
+            MainWindow.SetConfigValue(config, "ComboMode", (chkComboMode.IsChecked ?? false).ToString());
 
             SaveHistory(config, cmbBasePath, "HistoryBasePath");
             SaveHistory(config, cmbIncludeFiles, "HistoryIncludeFiles");
@@ -367,14 +370,9 @@ namespace rg_gui
                     if (e.AddedItems[0] is FileSearchResult addedItem)
                     {
                         GetScrollViewer(gridResultLines)?.ScrollToLeftEnd();
-                        ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
-
-                        var lineResults = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == addedItem.Path && x.Key.filename == addedItem.Filename).OrderBy(x => x.Key.lineNumber);
-                        foreach (var lineResult in lineResults)
-                        {
-                            ResultLineItems.Add(new ResultLine(lineResult.Key.lineNumber, GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(), lineResult.Key.filename, lineResult.Key.path));
-                        }
-
+                        var fileItems = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == addedItem.Path && x.Key.filename == addedItem.Filename);
+                        var displayLines = BuildDisplayLines(fileItems);
+                        ResultLineItems.Reset(displayLines);
                         txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
                     }
                 }
@@ -395,6 +393,13 @@ namespace rg_gui
                     grid.SelectAll();
                     e.Handled = true;
                 }
+                return;
+            }
+
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.C)
+            {
+                copySelectedAsCombo_Click(sender, new RoutedEventArgs());
+                e.Handled = true;
                 return;
             }
 
@@ -551,6 +556,12 @@ namespace rg_gui
 
             try
             {
+                int effContextLines = GetContextLines();
+                if (chkComboMode.IsChecked == true && effContextLines < 2)
+                {
+                    effContextLines = 2;
+                }
+
                 var searchParameters = new SearchParameters
                 {
                     StartPath = startPath,
@@ -563,7 +574,7 @@ namespace rg_gui
                     Encoding = (FileEncoding)cmbEncoding.SelectedIndex,
                     MaxFileSize = int.Parse(txtMaxFileSize.Text),
                     MaxFileSizeUnit = (MaxFileSizeUnit)cmbFileSizeUnit.SelectedIndex,
-                    ContextLines = GetContextLines(),
+                    ContextLines = effContextLines,
                 };
 
                 FileResultItems.Reset(Enumerable.Empty<FileSearchResult>());
@@ -589,6 +600,10 @@ namespace rg_gui
             if (chkShowAllLines.IsChecked == true)
             {
                 PopulateAllLines();
+            }
+            else if (FileResultItems.Count > 0 && gridFileResults.SelectedIndex < 0)
+            {
+                gridFileResults.SelectedIndex = 0;
             }
         }
 
@@ -691,21 +706,89 @@ namespace rg_gui
             }
         }
 
+        private List<ResultLine> BuildDisplayLines(IEnumerable<KeyValuePair<(string path, string filename, int lineNumber), LineResult>> items)
+        {
+            var sorted = items.OrderBy(x => x.Key.path).ThenBy(x => x.Key.filename).ThenBy(x => x.Key.lineNumber).ToList();
+
+            if (chkComboMode.IsChecked != true)
+            {
+                return sorted.Select(x => new ResultLine(
+                    x.Key.lineNumber,
+                    GetColorizedString(x.Value.LineContent, x.Value.TermResults).Trim(),
+                    x.Key.filename,
+                    x.Key.path
+                )).ToList();
+            }
+
+            var resultList = new List<ResultLine>();
+            int i = 0;
+            while (i < sorted.Count)
+            {
+                var current = sorted[i];
+                string cleanContent = current.Value.LineContent.Trim();
+
+                if (ComboHelper.IsAlreadyCombo(cleanContent))
+                {
+                    resultList.Add(new ResultLine(
+                        current.Key.lineNumber,
+                        GetColorizedString(current.Value.LineContent, current.Value.TermResults).Trim(),
+                        current.Key.filename,
+                        current.Key.path
+                    ));
+                    i++;
+                    continue;
+                }
+
+                if (ComboHelper.TryExtractComboBlock(sorted, i, out var comboText, out var mergedTerms, out int consumedCount))
+                {
+                    resultList.Add(new ResultLine(
+                        current.Key.lineNumber,
+                        GetColorizedString(comboText, mergedTerms).Trim(),
+                        current.Key.filename,
+                        current.Key.path
+                    ));
+                    i += consumedCount;
+                }
+                else
+                {
+                    resultList.Add(new ResultLine(
+                        current.Key.lineNumber,
+                        GetColorizedString(current.Value.LineContent, current.Value.TermResults).Trim(),
+                        current.Key.filename,
+                        current.Key.path
+                    ));
+                    i++;
+                }
+            }
+
+            return resultList;
+        }
+
+        private void chkComboMode_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!IsLoaded) return;
+            if (m_ripGrepWrapper.FileResults.Count > 0)
+            {
+                if (chkShowAllLines.IsChecked == true)
+                {
+                    PopulateAllLines();
+                }
+                else if (gridFileResults.SelectedItem is FileSearchResult selectedFile)
+                {
+                    var fileItems = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == selectedFile.Path && x.Key.filename == selectedFile.Filename);
+                    var displayLines = BuildDisplayLines(fileItems);
+                    ResultLineItems.Reset(displayLines);
+                    txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
+                }
+            }
+        }
+
         private void PopulateAllLines()
         {
             try
             {
-                var allLines = new List<ResultLine>();
-                foreach (var lineResult in m_ripGrepWrapper.FileResults.OrderBy(x => x.Key.path).ThenBy(x => x.Key.filename).ThenBy(x => x.Key.lineNumber))
-                {
-                    allLines.Add(new ResultLine(
-                        lineResult.Key.lineNumber,
-                        GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(),
-                        lineResult.Key.filename,
-                        lineResult.Key.path
-                    ));
-                }
-                ResultLineItems.Reset(allLines);
+                var displayLines = BuildDisplayLines(m_ripGrepWrapper.FileResults);
+                ResultLineItems.Reset(displayLines);
                 txtResultLineStatus.Text = $"{ResultLineItems.Count} lines matched.";
             }
             catch (Exception ex)
@@ -782,6 +865,91 @@ namespace rg_gui
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error in copyAllLines_Click: {ex.Message}");
+            }
+        }
+
+        private void copySelectedAsCombo_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (gridResultLines.SelectedItems.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var item in gridResultLines.SelectedItems)
+                    {
+                        if (item is ResultLine resultLine)
+                        {
+                            var clean = Regex.Replace(resultLine.Content ?? "", @"</?c\d+>", "").Trim();
+                            sb.AppendLine(clean);
+                        }
+                    }
+                    if (sb.Length > 0)
+                    {
+                        SetClipboardTextWithRetry(sb.ToString());
+                        MessageBox.Show("Combos copiados al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error copying selected combos: {ex.Message}");
+            }
+        }
+
+        private void copyAllAsCombo_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ResultLineItems.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var item in ResultLineItems)
+                    {
+                        var clean = Regex.Replace(item.Content ?? "", @"</?c\d+>", "").Trim();
+                        sb.AppendLine(clean);
+                    }
+                    if (sb.Length > 0)
+                    {
+                        SetClipboardTextWithRetry(sb.ToString());
+                        MessageBox.Show("Todos los combos copiados al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error copying all combos: {ex.Message}");
+            }
+        }
+
+        private void exportCombosToTxt_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog()
+            {
+                Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                FileName = "combos.txt"
+            };
+
+            if (dialog.ShowDialog(Window.GetWindow(this)) == true)
+            {
+                try
+                {
+                    using var writer = new StreamWriter(dialog.FileName, false, Encoding.UTF8);
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var item in ResultLineItems)
+                    {
+                        string cleanContent = Regex.Replace(item.Content ?? "", @"</?c\d+>", "").Trim();
+                        if (!string.IsNullOrWhiteSpace(cleanContent) && seen.Add(cleanContent))
+                        {
+                            writer.WriteLine(cleanContent);
+                        }
+                    }
+                    MessageBox.Show("Combos exportados con éxito.", "Exportar");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error al exportar: " + ex.Message, "Error");
+                }
             }
         }
 
