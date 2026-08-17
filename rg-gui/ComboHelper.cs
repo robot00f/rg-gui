@@ -10,19 +10,22 @@ namespace rg_gui
     {
         public static readonly string[] UrlPrefixes = new[]
         {
-            "url:", "url :", "url=", "host:", "host :", "host=", "site:", "site :", "website:", "website :", "link:", "target:"
+            "url:", "url :", "url=", "host:", "host :", "host=", "site:", "site :", "website:", "target:"
         };
 
         public static readonly string[] UserPrefixes = new[]
         {
-            "user:", "user :", "user=", "username:", "username :", "username=", "login:", "login :", "login=",
-            "usr:", "usr :", "account:", "account :", "email:", "email :", "mail:", "mail :"
+            "user:", "user :", "user=", "username:", "username :", "login:", "login :", "email:", "email :", "usr:", "usr :", "account:"
         };
 
         public static readonly string[] PassPrefixes = new[]
         {
-            "pass:", "pass :", "pass=", "password:", "password :", "password=", "pwd:", "pwd :", "pwd=",
-            "secret:", "secret :", "key:", "clave:", "contraseña:", "contrasena:"
+            "pass:", "pass :", "pass=", "password:", "password :", "pwd:", "pwd :", "clave:", "contraseña:", "contrasena:", "secret:", "key:"
+        };
+
+        public static readonly string[] IgnorePrefixes = new[]
+        {
+            "soft:", "browser:", "profile:", "application:", "app:", "title:", "time:", "path:", "created:", "modified:", "========", "--------"
         };
 
         public static bool TryGetPrefixValue(string line, string[] prefixes, out string value)
@@ -48,8 +51,11 @@ namespace rg_gui
             if (string.IsNullOrWhiteSpace(line)) return false;
             var trimmed = line.Trim();
 
-            // If line starts with URL/Host prefix or http:// or android://, it's not user:pass
+            // If line starts with URL/Host/User/Pass/Ignore prefix or http:// or android://, it's not raw user:pass
             if (UrlPrefixes.Any(p => trimmed.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
+                UserPrefixes.Any(p => trimmed.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
+                PassPrefixes.Any(p => trimmed.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
+                IgnorePrefixes.Any(p => trimmed.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
                 trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("android://", StringComparison.OrdinalIgnoreCase))
@@ -57,14 +63,12 @@ namespace rg_gui
                 return false;
             }
 
-            // Must contain a colon
             int firstColon = trimmed.IndexOf(':');
             if (firstColon > 0 && firstColon < trimmed.Length - 1)
             {
                 string u = trimmed.Substring(0, firstColon).Trim();
                 string p = trimmed.Substring(firstColon + 1).Trim();
 
-                // Username should not contain spaces, or should have @ or phone number
                 if (!string.IsNullOrWhiteSpace(u) && !string.IsNullOrWhiteSpace(p) && !u.Contains(' '))
                 {
                     user = u;
@@ -81,7 +85,6 @@ namespace rg_gui
             if (string.IsNullOrWhiteSpace(line)) return false;
             var trimmed = line.Trim();
 
-            // e.g. https://domain.com/path:user@email.com:password or android://...@pkg/:user:pass
             if ((trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                  trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
                  trimmed.StartsWith("android://", StringComparison.OrdinalIgnoreCase)) &&
@@ -155,17 +158,7 @@ namespace rg_gui
                     }
                 }
 
-                // 3. If URL is found, check if current line is already a "user:pass" line (2-line format)
-                if (foundUrl != null && foundUser == null && TrySplitUserPass(line, out var splitUser, out var splitPass))
-                {
-                    foundUser = splitUser;
-                    foundPass = splitPass;
-                    lastMatchedOffset = offset;
-                    CollectTerms(item.Value.TermResults, termResultsAcc);
-                    break;
-                }
-
-                // 4. Check for User prefix line (3-line format)
+                // 3. Check for User prefix line (3-line format)
                 if (foundUser == null && TryGetPrefixValue(line, UserPrefixes, out var userVal))
                 {
                     if (!string.IsNullOrWhiteSpace(userVal))
@@ -177,7 +170,7 @@ namespace rg_gui
                     }
                 }
 
-                // 5. Check for Pass prefix line (3-line format)
+                // 4. Check for Pass prefix line (3-line format)
                 if (foundPass == null && TryGetPrefixValue(line, PassPrefixes, out var passVal))
                 {
                     if (!string.IsNullOrWhiteSpace(passVal))
@@ -189,13 +182,14 @@ namespace rg_gui
                     }
                 }
 
-                // 6. Standalone user:pass (no URL header)
-                if (foundUrl == null && foundUser == null && TrySplitUserPass(line, out var loneUser, out var lonePass))
+                // 5. If no User/Pass prefix was found yet, check for raw "user:pass" line (2-line format)
+                if (foundUser == null && foundPass == null && TrySplitUserPass(line, out var splitUser, out var splitPass))
                 {
-                    comboText = $"{loneUser}:{lonePass}";
-                    mergedTerms = item.Value.TermResults.ToList();
-                    consumedCount = 1;
-                    return true;
+                    foundUser = splitUser;
+                    foundPass = splitPass;
+                    lastMatchedOffset = offset;
+                    CollectTerms(item.Value.TermResults, termResultsAcc);
+                    break;
                 }
 
                 if (foundUser != null && foundPass != null)
@@ -260,7 +254,6 @@ namespace rg_gui
             {
                 string line = lineList[i];
 
-                // Check for complete inline URL combo
                 if (IsFullUrlCombo(line, out var fullCombo))
                 {
                     if (seen.Add(fullCombo))
@@ -288,14 +281,6 @@ namespace rg_gui
                         continue;
                     }
 
-                    if (url != null && user == null && TrySplitUserPass(candidate, out var su, out var sp))
-                    {
-                        user = su;
-                        pass = sp;
-                        lastOffset = offset;
-                        break;
-                    }
-
                     if (user == null && TryGetPrefixValue(candidate, UserPrefixes, out var us) && !string.IsNullOrWhiteSpace(us))
                     {
                         user = us;
@@ -310,10 +295,10 @@ namespace rg_gui
                         continue;
                     }
 
-                    if (url == null && user == null && TrySplitUserPass(candidate, out var loneU, out var loneP))
+                    if (user == null && pass == null && TrySplitUserPass(candidate, out var su, out var sp))
                     {
-                        user = loneU;
-                        pass = loneP;
+                        user = su;
+                        pass = sp;
                         lastOffset = offset;
                         break;
                     }
