@@ -398,12 +398,28 @@ namespace rg_gui
                 return;
             }
 
-            if (e.Key != Key.F3)
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.E)
             {
+                OpenContainingFolder();
+                e.Handled = true;
                 return;
             }
 
-            OpenFileViewer();
+            if (e.Key == Key.F3 || e.Key == Key.Enter)
+            {
+                OpenFileViewer();
+                e.Handled = true;
+                return;
+            }
+        }
+
+        private void gridResultLines_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                OpenFileViewer();
+                e.Handled = true;
+            }
         }
 
         private void grid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -418,14 +434,6 @@ namespace rg_gui
         private void grid_RequestBringIntoViewHandler(object sender, RequestBringIntoViewEventArgs e)
         {
             e.Handled = true;
-        }
-
-        private void gridResultLines_ContextMenuOpening(object sender, ContextMenuEventArgs e)
-        {
-            if (string.IsNullOrEmpty(MainWindow.FileViewerPath) || string.IsNullOrEmpty(MainWindow.FileViewerArgs))
-            {
-                e.Handled = true;
-            }
         }
 
         private static ScrollViewer? GetScrollViewer(UIElement? element)
@@ -831,6 +839,11 @@ namespace rg_gui
             OpenFileViewer();
         }
 
+        private void openContainingFolder_Click(object sender, RoutedEventArgs e)
+        {
+            OpenContainingFolder();
+        }
+
         private string GetColorizedString(string source, IEnumerable<TermResult> termResults)
         {
             var segmentEdges = new List<int>();
@@ -891,63 +904,121 @@ namespace rg_gui
             return source.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
         }
 
-        private void OpenFileViewer()
+        private string? GetSelectedResultLineFullPath(out int lineNumber)
         {
-            if (gridResultLines.SelectedItems.Count <= 0)
+            lineNumber = 1;
+            if (gridResultLines.SelectedItems.Count > 0 && gridResultLines.SelectedItems[gridResultLines.SelectedItems.Count - 1] is ResultLine resultLine)
             {
-                return;
-            }
-
-            var resultLine = gridResultLines.SelectedItems[gridResultLines.SelectedItems.Count - 1] as ResultLine;
-            if (resultLine == null)
-            {
-                return;
-            }
-
-            string fullPath = "";
-
-            if (chkShowAllLines.IsChecked == true)
-            {
+                lineNumber = resultLine.Line;
                 if (!string.IsNullOrEmpty(resultLine.Path) && !string.IsNullOrEmpty(resultLine.File))
                 {
-                    fullPath = Path.Combine(resultLine.Path, resultLine.File);
-                }
-            }
-            else
-            {
-                if (gridFileResults.SelectedItems.Count > 0)
-                {
-                    var resultFile = gridFileResults.SelectedItems[gridFileResults.SelectedItems.Count - 1] as FileSearchResult;
-                    if (resultFile != null)
-                    {
-                        fullPath = Path.Combine(resultFile.Path, resultFile.Filename);
-                    }
+                    return Path.Combine(resultLine.Path, resultLine.File);
                 }
             }
 
+            if (gridFileResults.SelectedItems.Count > 0 && gridFileResults.SelectedItems[gridFileResults.SelectedItems.Count - 1] is FileSearchResult resultFile)
+            {
+                if (!string.IsNullOrEmpty(resultFile.Path) && !string.IsNullOrEmpty(resultFile.Filename))
+                {
+                    return Path.Combine(resultFile.Path, resultFile.Filename);
+                }
+            }
+
+            return null;
+        }
+
+        private void OpenFileViewer()
+        {
+            var fullPath = GetSelectedResultLineFullPath(out int lineNumber);
+            if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(MainWindow.FileViewerPath) && File.Exists(MainWindow.FileViewerPath))
+                {
+                    string rawArgs = MainWindow.FileViewerArgs ?? "$FILE";
+                    string fileArg = $"\"{fullPath.Trim('\"')}\"";
+                    string args;
+
+                    if (rawArgs.Contains("\"$FILE\""))
+                    {
+                        args = rawArgs.Replace("\"$FILE\"", fileArg);
+                    }
+                    else if (rawArgs.Contains("$FILE"))
+                    {
+                        args = rawArgs.Replace("$FILE", fileArg);
+                    }
+                    else
+                    {
+                        args = $"{rawArgs} {fileArg}";
+                    }
+
+                    args = args.Replace("$LINE", lineNumber.ToString());
+
+                    var processStartInfo = new ProcessStartInfo()
+                    {
+                        FileName = MainWindow.FileViewerPath,
+                        Arguments = args,
+                        UseShellExecute = false
+                    };
+
+                    using var process = Process.Start(processStartInfo);
+                }
+                else
+                {
+                    // Open with default associated application
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = fullPath,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenContainingFolder()
+        {
+            var fullPath = GetSelectedResultLineFullPath(out _);
             if (string.IsNullOrEmpty(fullPath))
             {
                 return;
             }
 
-            if (!string.IsNullOrEmpty(MainWindow.FileViewerPath) && File.Exists(MainWindow.FileViewerPath) && !string.IsNullOrEmpty(MainWindow.FileViewerArgs) && MainWindow.FileViewerArgs.Contains("$FILE"))
+            try
             {
-                var args = MainWindow.FileViewerArgs
-                    .Replace("$FILE", $"\"{fullPath}\"")
-                    .Replace("$LINE", resultLine.Line.ToString());
-
-                var processStartInfo = new ProcessStartInfo()
+                if (File.Exists(fullPath))
                 {
-                    FileName = MainWindow.FileViewerPath,
-                    Arguments = args,
-                    UseShellExecute = false
-                };
-
-                using var process = new Process()
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{fullPath}\"",
+                        UseShellExecute = true
+                    });
+                }
+                else
                 {
-                    StartInfo = processStartInfo
-                };
-                process.Start();
+                    var dir = Path.GetDirectoryName(fullPath);
+                    if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"\"{dir}\"",
+                            UseShellExecute = true
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening folder: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

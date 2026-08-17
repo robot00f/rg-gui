@@ -143,10 +143,11 @@
 
             <GridSplitter Grid.Row="0" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
 
-            <DataGrid Grid.Row="0" Grid.Column="2" x:Name="gridResultLines" ItemsSource="{Binding Source={StaticResource ResultLineItemsCollectionViewSource}}" AutoGenerateColumns="False" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False" SelectionUnit="FullRow" ContextMenuOpening="gridResultLines_ContextMenuOpening" Background="{DynamicResource DataGrid.Static.Background}">
+            <DataGrid Grid.Row="0" Grid.Column="2" x:Name="gridResultLines" ItemsSource="{Binding Source={StaticResource ResultLineItemsCollectionViewSource}}" AutoGenerateColumns="False" GridLinesVisibility="None" BorderThickness="1,1,1,0" CanUserDeleteRows="False" SelectionUnit="FullRow" Background="{DynamicResource DataGrid.Static.Background}">
                 <DataGrid.Resources>
                     <ContextMenu x:Key="lineContextMenu">
-                        <MenuItem Header="Open in File Viewer" Click="openInFileViewer_Click" InputGestureText="F3"/>
+                        <MenuItem Header="Open in File Viewer" Click="openInFileViewer_Click" InputGestureText="F3 / Double-Click"/>
+                        <MenuItem Header="Open Containing Folder" Click="openContainingFolder_Click" InputGestureText="Ctrl+E"/>
                         <Separator />
                         <MenuItem Header="Select All" Click="selectAllLines_Click" InputGestureText="Ctrl+A"/>
                         <Separator />
@@ -162,6 +163,7 @@
                             <EventSetter Event="PreviewMouseRightButtonDown" Handler="grid_PreviewMouseRightButtonDown"/>
                             <EventSetter Event="Control.RequestBringIntoView" Handler="grid_RequestBringIntoViewHandler"/>
                             <EventSetter Event="PreviewKeyDown" Handler="grid_PreviewKeyDown"/>
+                            <EventSetter Event="MouseDoubleClick" Handler="gridResultLines_MouseDoubleClick"/>
                             <Setter Property="ContextMenu" Value="{StaticResource lineContextMenu}"/>
                         </Style.Setters>
                     </Style>
