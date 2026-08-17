@@ -41,21 +41,26 @@ namespace rg_gui
             return false;
         }
 
-        public static bool IsAlreadyCombo(string line)
+        public static bool IsAlreadyCombo(string line, out string combo)
         {
+            combo = string.Empty;
             if (string.IsNullOrWhiteSpace(line)) return false;
             var trimmed = line.Trim();
 
+            // URL:USER:PASS format (e.g. https://domain.com/path:user@email.com:password)
             if (trimmed.Contains("://") && trimmed.Count(c => c == ':') >= 2)
             {
+                combo = trimmed;
                 return true;
             }
 
+            // USER:PASS with email (e.g. user@domain.com:password without spaces)
             if (trimmed.Contains('@') && trimmed.Contains(':') && !trimmed.Contains(' '))
             {
                 var parts = trimmed.Split(':');
-                if (parts.Length >= 2 && parts[0].Contains('@'))
+                if (parts.Length >= 2 && parts[0].Contains('@') && !string.IsNullOrWhiteSpace(parts[1]))
                 {
+                    combo = trimmed;
                     return true;
                 }
             }
@@ -85,8 +90,7 @@ namespace rg_gui
             string? foundPass = null;
             var termResultsAcc = new List<TermResult>();
 
-            int maxLookahead = Math.Min(5, items.Count - startIndex);
-            int matchCount = 0;
+            int maxLookahead = Math.Min(6, items.Count - startIndex);
             int lastMatchedOffset = 0;
 
             for (int offset = 0; offset < maxLookahead; offset++)
@@ -97,7 +101,7 @@ namespace rg_gui
                     break;
                 }
 
-                if (offset > 0 && item.Key.lineNumber > items[startIndex + offset - 1].Key.lineNumber + 5)
+                if (offset > 0 && item.Key.lineNumber > items[startIndex + offset - 1].Key.lineNumber + 6)
                 {
                     break;
                 }
@@ -106,30 +110,36 @@ namespace rg_gui
 
                 if (foundUrl == null && TryGetPrefixValue(line, UrlPrefixes, out var urlVal))
                 {
-                    foundUrl = urlVal;
-                    matchCount++;
-                    lastMatchedOffset = offset;
-                    CollectTerms(item.Value.TermResults, termResultsAcc);
+                    if (!string.IsNullOrWhiteSpace(urlVal))
+                    {
+                        foundUrl = urlVal;
+                        lastMatchedOffset = offset;
+                        CollectTerms(item.Value.TermResults, termResultsAcc);
+                    }
                 }
                 else if (foundUser == null && TryGetPrefixValue(line, UserPrefixes, out var userVal))
                 {
-                    foundUser = userVal;
-                    matchCount++;
-                    lastMatchedOffset = offset;
-                    CollectTerms(item.Value.TermResults, termResultsAcc);
+                    if (!string.IsNullOrWhiteSpace(userVal))
+                    {
+                        foundUser = userVal;
+                        lastMatchedOffset = offset;
+                        CollectTerms(item.Value.TermResults, termResultsAcc);
+                    }
                 }
                 else if (foundPass == null && TryGetPrefixValue(line, PassPrefixes, out var passVal))
                 {
-                    foundPass = passVal;
-                    matchCount++;
-                    lastMatchedOffset = offset;
-                    CollectTerms(item.Value.TermResults, termResultsAcc);
-                }
-                else if (IsAlreadyCombo(line))
-                {
-                    if (matchCount == 0)
+                    if (!string.IsNullOrWhiteSpace(passVal))
                     {
-                        comboText = line;
+                        foundPass = passVal;
+                        lastMatchedOffset = offset;
+                        CollectTerms(item.Value.TermResults, termResultsAcc);
+                    }
+                }
+                else if (IsAlreadyCombo(line, out var existingCombo))
+                {
+                    if (foundUrl == null && foundUser == null && foundPass == null)
+                    {
+                        comboText = existingCombo;
                         mergedTerms = item.Value.TermResults.ToList();
                         consumedCount = 1;
                         return true;
@@ -142,9 +152,9 @@ namespace rg_gui
                 }
             }
 
-            if (foundUser != null && foundPass != null)
+            if (!string.IsNullOrWhiteSpace(foundUser) && !string.IsNullOrWhiteSpace(foundPass))
             {
-                if (!string.IsNullOrEmpty(foundUrl))
+                if (!string.IsNullOrWhiteSpace(foundUrl))
                 {
                     comboText = $"{foundUrl}:{foundUser}:{foundPass}";
                 }
@@ -159,6 +169,115 @@ namespace rg_gui
             }
 
             return false;
+        }
+
+        public static List<string> ExtractAllCombos(IEnumerable<KeyValuePair<(string path, string filename, int lineNumber), LineResult>> items)
+        {
+            var sorted = items.OrderBy(x => x.Key.path).ThenBy(x => x.Key.filename).ThenBy(x => x.Key.lineNumber).ToList();
+            var combos = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            int i = 0;
+            while (i < sorted.Count)
+            {
+                var current = sorted[i];
+                string cleanContent = current.Value.LineContent.Trim();
+
+                if (IsAlreadyCombo(cleanContent, out var existingCombo))
+                {
+                    if (seen.Add(existingCombo))
+                    {
+                        combos.Add(existingCombo);
+                    }
+                    i++;
+                    continue;
+                }
+
+                if (TryExtractComboBlock(sorted, i, out var comboText, out _, out int consumedCount))
+                {
+                    if (!string.IsNullOrWhiteSpace(comboText) && seen.Add(comboText))
+                    {
+                        combos.Add(comboText);
+                    }
+                    i += consumedCount;
+                }
+                else
+                {
+                    i++;
+                }
+            }
+
+            return combos;
+        }
+
+        public static List<string> ExtractCombosFromStrings(IEnumerable<string> lines)
+        {
+            var combos = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var lineList = lines.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).ToList();
+            int i = 0;
+            while (i < lineList.Count)
+            {
+                string line = lineList[i];
+
+                if (IsAlreadyCombo(line, out var existing))
+                {
+                    if (seen.Add(existing))
+                    {
+                        combos.Add(existing);
+                    }
+                    i++;
+                    continue;
+                }
+
+                string? url = null;
+                string? user = null;
+                string? pass = null;
+                int lookahead = Math.Min(6, lineList.Count - i);
+                int lastOffset = 0;
+
+                for (int offset = 0; offset < lookahead; offset++)
+                {
+                    string candidate = lineList[i + offset];
+                    if (url == null && TryGetPrefixValue(candidate, UrlPrefixes, out var u) && !string.IsNullOrWhiteSpace(u))
+                    {
+                        url = u;
+                        lastOffset = offset;
+                    }
+                    else if (user == null && TryGetPrefixValue(candidate, UserPrefixes, out var us) && !string.IsNullOrWhiteSpace(us))
+                    {
+                        user = us;
+                        lastOffset = offset;
+                    }
+                    else if (pass == null && TryGetPrefixValue(candidate, PassPrefixes, out var p) && !string.IsNullOrWhiteSpace(p))
+                    {
+                        pass = p;
+                        lastOffset = offset;
+                    }
+
+                    if (user != null && pass != null)
+                    {
+                        break;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+                {
+                    string combo = !string.IsNullOrWhiteSpace(url) ? $"{url}:{user}:{pass}" : $"{user}:{pass}";
+                    if (seen.Add(combo))
+                    {
+                        combos.Add(combo);
+                    }
+                    i += Math.Max(1, lastOffset + 1);
+                }
+                else
+                {
+                    i++;
+                }
+            }
+
+            return combos;
         }
 
         private static void CollectTerms(IEnumerable<TermResult> source, List<TermResult> target)

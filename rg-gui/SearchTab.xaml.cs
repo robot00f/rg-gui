@@ -727,11 +727,11 @@ namespace rg_gui
                 var current = sorted[i];
                 string cleanContent = current.Value.LineContent.Trim();
 
-                if (ComboHelper.IsAlreadyCombo(cleanContent))
+                if (ComboHelper.IsAlreadyCombo(cleanContent, out var existingCombo))
                 {
                     resultList.Add(new ResultLine(
                         current.Key.lineNumber,
-                        GetColorizedString(current.Value.LineContent, current.Value.TermResults).Trim(),
+                        GetColorizedString(existingCombo, current.Value.TermResults).Trim(),
                         current.Key.filename,
                         current.Key.path
                     ));
@@ -751,12 +751,16 @@ namespace rg_gui
                 }
                 else
                 {
-                    resultList.Add(new ResultLine(
-                        current.Key.lineNumber,
-                        GetColorizedString(current.Value.LineContent, current.Value.TermResults).Trim(),
-                        current.Key.filename,
-                        current.Key.path
-                    ));
+                    // If in Combo Mode, only display actual content lines
+                    if (!string.IsNullOrWhiteSpace(cleanContent))
+                    {
+                        resultList.Add(new ResultLine(
+                            current.Key.lineNumber,
+                            GetColorizedString(current.Value.LineContent, current.Value.TermResults).Trim(),
+                            current.Key.filename,
+                            current.Key.path
+                        ));
+                    }
                     i++;
                 }
             }
@@ -874,19 +878,27 @@ namespace rg_gui
             {
                 if (gridResultLines.SelectedItems.Count > 0)
                 {
-                    var sb = new StringBuilder();
+                    var rawLines = new List<string>();
                     foreach (var item in gridResultLines.SelectedItems)
                     {
                         if (item is ResultLine resultLine)
                         {
                             var clean = Regex.Replace(resultLine.Content ?? "", @"</?c\d+>", "").Trim();
-                            sb.AppendLine(clean);
+                            rawLines.Add(clean);
                         }
                     }
-                    if (sb.Length > 0)
+
+                    var combos = ComboHelper.ExtractCombosFromStrings(rawLines);
+                    if (combos.Count == 0)
                     {
-                        SetClipboardTextWithRetry(sb.ToString());
-                        MessageBox.Show("Combos copiados al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
+                        combos = rawLines.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+                    }
+
+                    if (combos.Count > 0)
+                    {
+                        var text = string.Join(Environment.NewLine, combos);
+                        SetClipboardTextWithRetry(text);
+                        MessageBox.Show($"Se copiaron {combos.Count} combos al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
                     }
                 }
             }
@@ -900,19 +912,22 @@ namespace rg_gui
         {
             try
             {
-                if (ResultLineItems.Count > 0)
+                var combos = ComboHelper.ExtractAllCombos(m_ripGrepWrapper.FileResults);
+                if (combos.Count == 0 && ResultLineItems.Count > 0)
                 {
-                    var sb = new StringBuilder();
-                    foreach (var item in ResultLineItems)
-                    {
-                        var clean = Regex.Replace(item.Content ?? "", @"</?c\d+>", "").Trim();
-                        sb.AppendLine(clean);
-                    }
-                    if (sb.Length > 0)
-                    {
-                        SetClipboardTextWithRetry(sb.ToString());
-                        MessageBox.Show("Todos los combos copiados al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
+                    var rawLines = ResultLineItems.Select(x => Regex.Replace(x.Content ?? "", @"</?c\d+>", "").Trim());
+                    combos = ComboHelper.ExtractCombosFromStrings(rawLines);
+                }
+
+                if (combos.Count > 0)
+                {
+                    var text = string.Join(Environment.NewLine, combos);
+                    SetClipboardTextWithRetry(text);
+                    MessageBox.Show($"Se copiaron {combos.Count} combos al portapapeles.", "Copiado", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("No se encontraron credenciales para armar combos.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
             catch (Exception ex)
@@ -933,22 +948,24 @@ namespace rg_gui
             {
                 try
                 {
-                    using var writer = new StreamWriter(dialog.FileName, false, Encoding.UTF8);
-                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var item in ResultLineItems)
+                    var combos = ComboHelper.ExtractAllCombos(m_ripGrepWrapper.FileResults);
+                    if (combos.Count == 0 && ResultLineItems.Count > 0)
                     {
-                        string cleanContent = Regex.Replace(item.Content ?? "", @"</?c\d+>", "").Trim();
-                        if (!string.IsNullOrWhiteSpace(cleanContent) && seen.Add(cleanContent))
-                        {
-                            writer.WriteLine(cleanContent);
-                        }
+                        var rawLines = ResultLineItems.Select(x => Regex.Replace(x.Content ?? "", @"</?c\d+>", "").Trim());
+                        combos = ComboHelper.ExtractCombosFromStrings(rawLines);
                     }
-                    MessageBox.Show("Combos exportados con éxito.", "Exportar");
+
+                    using var writer = new StreamWriter(dialog.FileName, false, Encoding.UTF8);
+                    foreach (var combo in combos)
+                    {
+                        writer.WriteLine(combo);
+                    }
+
+                    MessageBox.Show($"Se exportaron {combos.Count} combos con éxito.", "Exportar Combos", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Error al exportar: " + ex.Message, "Error");
+                    MessageBox.Show("Error al exportar: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
