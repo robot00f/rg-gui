@@ -725,19 +725,6 @@ namespace rg_gui
             while (i < sorted.Count)
             {
                 var current = sorted[i];
-                string cleanContent = current.Value.LineContent.Trim();
-
-                if (ComboHelper.IsAlreadyCombo(cleanContent, out var existingCombo))
-                {
-                    resultList.Add(new ResultLine(
-                        current.Key.lineNumber,
-                        GetColorizedString(existingCombo, current.Value.TermResults).Trim(),
-                        current.Key.filename,
-                        current.Key.path
-                    ));
-                    i++;
-                    continue;
-                }
 
                 if (ComboHelper.TryExtractComboBlock(sorted, i, out var comboText, out var mergedTerms, out int consumedCount))
                 {
@@ -751,8 +738,8 @@ namespace rg_gui
                 }
                 else
                 {
-                    // If in Combo Mode, only display actual content lines
-                    if (!string.IsNullOrWhiteSpace(cleanContent))
+                    string cleanContent = current.Value.LineContent.Trim();
+                    if (!string.IsNullOrWhiteSpace(cleanContent) && current.Value.TermResults.Count > 0)
                     {
                         resultList.Add(new ResultLine(
                             current.Key.lineNumber,

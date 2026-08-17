@@ -8,18 +8,18 @@ namespace rg_gui
 {
     public static class ComboHelper
     {
-        private static readonly string[] UrlPrefixes = new[]
+        public static readonly string[] UrlPrefixes = new[]
         {
             "url:", "url :", "url=", "host:", "host :", "host=", "site:", "site :", "website:", "website :", "link:", "target:"
         };
 
-        private static readonly string[] UserPrefixes = new[]
+        public static readonly string[] UserPrefixes = new[]
         {
             "user:", "user :", "user=", "username:", "username :", "username=", "login:", "login :", "login=",
             "usr:", "usr :", "account:", "account :", "email:", "email :", "mail:", "mail :"
         };
 
-        private static readonly string[] PassPrefixes = new[]
+        public static readonly string[] PassPrefixes = new[]
         {
             "pass:", "pass :", "pass=", "password:", "password :", "password=", "pwd:", "pwd :", "pwd=",
             "secret:", "secret :", "key:", "clave:", "contraseña:", "contrasena:"
@@ -41,28 +41,54 @@ namespace rg_gui
             return false;
         }
 
-        public static bool IsAlreadyCombo(string line, out string combo)
+        public static bool TrySplitUserPass(string line, out string user, out string pass)
+        {
+            user = string.Empty;
+            pass = string.Empty;
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            var trimmed = line.Trim();
+
+            // If line starts with URL/Host prefix or http:// or android://, it's not user:pass
+            if (UrlPrefixes.Any(p => trimmed.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
+                trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("android://", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // Must contain a colon
+            int firstColon = trimmed.IndexOf(':');
+            if (firstColon > 0 && firstColon < trimmed.Length - 1)
+            {
+                string u = trimmed.Substring(0, firstColon).Trim();
+                string p = trimmed.Substring(firstColon + 1).Trim();
+
+                // Username should not contain spaces, or should have @ or phone number
+                if (!string.IsNullOrWhiteSpace(u) && !string.IsNullOrWhiteSpace(p) && !u.Contains(' '))
+                {
+                    user = u;
+                    pass = p;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static bool IsFullUrlCombo(string line, out string combo)
         {
             combo = string.Empty;
             if (string.IsNullOrWhiteSpace(line)) return false;
             var trimmed = line.Trim();
 
-            // URL:USER:PASS format (e.g. https://domain.com/path:user@email.com:password)
-            if (trimmed.Contains("://") && trimmed.Count(c => c == ':') >= 2)
+            // e.g. https://domain.com/path:user@email.com:password or android://...@pkg/:user:pass
+            if ((trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                 trimmed.StartsWith("android://", StringComparison.OrdinalIgnoreCase)) &&
+                trimmed.Count(c => c == ':') >= 2)
             {
                 combo = trimmed;
                 return true;
-            }
-
-            // USER:PASS with email (e.g. user@domain.com:password without spaces)
-            if (trimmed.Contains('@') && trimmed.Contains(':') && !trimmed.Contains(' '))
-            {
-                var parts = trimmed.Split(':');
-                if (parts.Length >= 2 && parts[0].Contains('@') && !string.IsNullOrWhiteSpace(parts[1]))
-                {
-                    combo = trimmed;
-                    return true;
-                }
             }
 
             return false;
@@ -108,6 +134,16 @@ namespace rg_gui
 
                 string line = item.Value.LineContent.Trim();
 
+                // 1. Check for complete inline URL combo (e.g. https://site.com:user:pass)
+                if (offset == 0 && IsFullUrlCombo(line, out var fullCombo))
+                {
+                    comboText = fullCombo;
+                    mergedTerms = item.Value.TermResults.ToList();
+                    consumedCount = 1;
+                    return true;
+                }
+
+                // 2. Check for URL/Host prefix line
                 if (foundUrl == null && TryGetPrefixValue(line, UrlPrefixes, out var urlVal))
                 {
                     if (!string.IsNullOrWhiteSpace(urlVal))
@@ -115,35 +151,51 @@ namespace rg_gui
                         foundUrl = urlVal;
                         lastMatchedOffset = offset;
                         CollectTerms(item.Value.TermResults, termResultsAcc);
+                        continue;
                     }
                 }
-                else if (foundUser == null && TryGetPrefixValue(line, UserPrefixes, out var userVal))
+
+                // 3. If URL is found, check if current line is already a "user:pass" line (2-line format)
+                if (foundUrl != null && foundUser == null && TrySplitUserPass(line, out var splitUser, out var splitPass))
+                {
+                    foundUser = splitUser;
+                    foundPass = splitPass;
+                    lastMatchedOffset = offset;
+                    CollectTerms(item.Value.TermResults, termResultsAcc);
+                    break;
+                }
+
+                // 4. Check for User prefix line (3-line format)
+                if (foundUser == null && TryGetPrefixValue(line, UserPrefixes, out var userVal))
                 {
                     if (!string.IsNullOrWhiteSpace(userVal))
                     {
                         foundUser = userVal;
                         lastMatchedOffset = offset;
                         CollectTerms(item.Value.TermResults, termResultsAcc);
+                        continue;
                     }
                 }
-                else if (foundPass == null && TryGetPrefixValue(line, PassPrefixes, out var passVal))
+
+                // 5. Check for Pass prefix line (3-line format)
+                if (foundPass == null && TryGetPrefixValue(line, PassPrefixes, out var passVal))
                 {
                     if (!string.IsNullOrWhiteSpace(passVal))
                     {
                         foundPass = passVal;
                         lastMatchedOffset = offset;
                         CollectTerms(item.Value.TermResults, termResultsAcc);
+                        continue;
                     }
                 }
-                else if (IsAlreadyCombo(line, out var existingCombo))
+
+                // 6. Standalone user:pass (no URL header)
+                if (foundUrl == null && foundUser == null && TrySplitUserPass(line, out var loneUser, out var lonePass))
                 {
-                    if (foundUrl == null && foundUser == null && foundPass == null)
-                    {
-                        comboText = existingCombo;
-                        mergedTerms = item.Value.TermResults.ToList();
-                        consumedCount = 1;
-                        return true;
-                    }
+                    comboText = $"{loneUser}:{lonePass}";
+                    mergedTerms = item.Value.TermResults.ToList();
+                    consumedCount = 1;
+                    return true;
                 }
 
                 if (foundUser != null && foundPass != null)
@@ -180,19 +232,6 @@ namespace rg_gui
             int i = 0;
             while (i < sorted.Count)
             {
-                var current = sorted[i];
-                string cleanContent = current.Value.LineContent.Trim();
-
-                if (IsAlreadyCombo(cleanContent, out var existingCombo))
-                {
-                    if (seen.Add(existingCombo))
-                    {
-                        combos.Add(existingCombo);
-                    }
-                    i++;
-                    continue;
-                }
-
                 if (TryExtractComboBlock(sorted, i, out var comboText, out _, out int consumedCount))
                 {
                     if (!string.IsNullOrWhiteSpace(comboText) && seen.Add(comboText))
@@ -221,11 +260,12 @@ namespace rg_gui
             {
                 string line = lineList[i];
 
-                if (IsAlreadyCombo(line, out var existing))
+                // Check for complete inline URL combo
+                if (IsFullUrlCombo(line, out var fullCombo))
                 {
-                    if (seen.Add(existing))
+                    if (seen.Add(fullCombo))
                     {
-                        combos.Add(existing);
+                        combos.Add(fullCombo);
                     }
                     i++;
                     continue;
@@ -240,20 +280,42 @@ namespace rg_gui
                 for (int offset = 0; offset < lookahead; offset++)
                 {
                     string candidate = lineList[i + offset];
+
                     if (url == null && TryGetPrefixValue(candidate, UrlPrefixes, out var u) && !string.IsNullOrWhiteSpace(u))
                     {
                         url = u;
                         lastOffset = offset;
+                        continue;
                     }
-                    else if (user == null && TryGetPrefixValue(candidate, UserPrefixes, out var us) && !string.IsNullOrWhiteSpace(us))
+
+                    if (url != null && user == null && TrySplitUserPass(candidate, out var su, out var sp))
+                    {
+                        user = su;
+                        pass = sp;
+                        lastOffset = offset;
+                        break;
+                    }
+
+                    if (user == null && TryGetPrefixValue(candidate, UserPrefixes, out var us) && !string.IsNullOrWhiteSpace(us))
                     {
                         user = us;
                         lastOffset = offset;
+                        continue;
                     }
-                    else if (pass == null && TryGetPrefixValue(candidate, PassPrefixes, out var p) && !string.IsNullOrWhiteSpace(p))
+
+                    if (pass == null && TryGetPrefixValue(candidate, PassPrefixes, out var p) && !string.IsNullOrWhiteSpace(p))
                     {
                         pass = p;
                         lastOffset = offset;
+                        continue;
+                    }
+
+                    if (url == null && user == null && TrySplitUserPass(candidate, out var loneU, out var loneP))
+                    {
+                        user = loneU;
+                        pass = loneP;
+                        lastOffset = offset;
+                        break;
                     }
 
                     if (user != null && pass != null)
