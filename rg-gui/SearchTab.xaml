@@ -85,6 +85,8 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="40"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <CheckBox Grid.Row="1" Grid.Column="0" Margin="0,0,0,5" x:Name="chkRecursive" Content="Recursive" VerticalContentAlignment="Center"/>
             <CheckBox Grid.Row="1" Grid.Column="1" Margin="15,0,0,5" x:Name="chkCaseSensitive" Content="Case-sensitive" VerticalContentAlignment="Center"/>
@@ -103,6 +105,16 @@
                 <ComboBoxItem x:Name="Kilobytes" Content="kB"/>
                 <ComboBoxItem x:Name="Megabytes" Content="MB"/>
                 <ComboBoxItem x:Name="Gigabytes" Content="GB"/>
+            </ComboBox>
+            <TextBlock Grid.Row="1" Grid.Column="9" Margin="15,0,0,5" Text="Context (+lines):" VerticalAlignment="Center" ToolTip="Number of lines after match (-A in RipGrep), useful for viewing username/password below URL"/>
+            <ComboBox Grid.Row="1" Grid.Column="10" Margin="5,0,0,5" x:Name="cmbContextLines" VerticalAlignment="Center" IsEditable="True" ToolTip="Lines after match (-A in RipGrep)">
+                <ComboBoxItem Content="0 (none)" Tag="0" IsSelected="True"/>
+                <ComboBoxItem Content="+1 line" Tag="1"/>
+                <ComboBoxItem Content="+2 lines (User/Pass)" Tag="2"/>
+                <ComboBoxItem Content="+3 lines" Tag="3"/>
+                <ComboBoxItem Content="+4 lines" Tag="4"/>
+                <ComboBoxItem Content="+5 lines" Tag="5"/>
+                <ComboBoxItem Content="+10 lines" Tag="10"/>
             </ComboBox>
         </Grid>
 

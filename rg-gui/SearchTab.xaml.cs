@@ -82,6 +82,9 @@ namespace rg_gui
                 cmbFileSizeUnit.SelectedIndex = 0;
             }
 
+            var contextLines = int.TryParse(config.AppSettings.Settings["ContextLines"]?.Value, out var cLines) ? cLines : 0;
+            SetContextLines(contextLines);
+
             // 1. Load history lists (sets selection to default first item)
             LoadHistory(cmbBasePath, "HistoryBasePath");
             LoadHistory(cmbIncludeFiles, "HistoryIncludeFiles", new[] { "*.*" });
@@ -98,6 +101,31 @@ namespace rg_gui
             SetComboBoxActiveText(cmbIncludeFiles, includeFiles ?? configIncludeFiles);
             SetComboBoxActiveText(cmbExcludeFiles, excludeFiles ?? configExcludeFiles);
             SetComboBoxActiveText(cmbContainingText, containingText ?? configContainingText);
+        }
+
+        private int GetContextLines()
+        {
+            if (cmbContextLines == null) return 0;
+            if (cmbContextLines.SelectedItem is ComboBoxItem item && item.Tag != null)
+            {
+                if (int.TryParse(item.Tag.ToString(), out int tagVal)) return Math.Max(0, tagVal);
+            }
+            if (int.TryParse(cmbContextLines.Text.Trim(), out int val)) return Math.Max(0, val);
+            return 0;
+        }
+
+        private void SetContextLines(int lines)
+        {
+            if (cmbContextLines == null) return;
+            foreach (var item in cmbContextLines.Items)
+            {
+                if (item is ComboBoxItem cbi && cbi.Tag?.ToString() == lines.ToString())
+                {
+                    cmbContextLines.SelectedItem = cbi;
+                    return;
+                }
+            }
+            cmbContextLines.Text = lines.ToString();
         }
 
         private static void SetComboBoxActiveText(ComboBox comboBox, string text)
@@ -250,6 +278,7 @@ namespace rg_gui
             MainWindow.SetConfigValue(config, "FileEncoding", (cmbEncoding.SelectedItem as ComboBoxItem)?.Name ?? MainWindow.DEFAULT_FILEENCODING);
             MainWindow.SetConfigValue(config, "MaxFileSize", txtMaxFileSize.Text);
             MainWindow.SetConfigValue(config, "MaxFileSizeUnit", (cmbFileSizeUnit.SelectedItem as ComboBoxItem)?.Name ?? MainWindow.DEFAULT_MAXFILESIZEUNIT);
+            MainWindow.SetConfigValue(config, "ContextLines", GetContextLines().ToString());
 
             SaveHistory(config, cmbBasePath, "HistoryBasePath");
             SaveHistory(config, cmbIncludeFiles, "HistoryIncludeFiles");
@@ -340,7 +369,7 @@ namespace rg_gui
                         GetScrollViewer(gridResultLines)?.ScrollToLeftEnd();
                         ResultLineItems.Reset(Enumerable.Empty<ResultLine>());
 
-                        var lineResults = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == addedItem.Path && x.Key.filename == addedItem.Filename);
+                        var lineResults = m_ripGrepWrapper.FileResults.Where(x => x.Key.path == addedItem.Path && x.Key.filename == addedItem.Filename).OrderBy(x => x.Key.lineNumber);
                         foreach (var lineResult in lineResults)
                         {
                             ResultLineItems.Add(new ResultLine(lineResult.Key.lineNumber, GetColorizedString(lineResult.Value.LineContent, lineResult.Value.TermResults).Trim(), lineResult.Key.filename, lineResult.Key.path));
@@ -526,6 +555,7 @@ namespace rg_gui
                     Encoding = (FileEncoding)cmbEncoding.SelectedIndex,
                     MaxFileSize = int.Parse(txtMaxFileSize.Text),
                     MaxFileSizeUnit = (MaxFileSizeUnit)cmbFileSizeUnit.SelectedIndex,
+                    ContextLines = GetContextLines(),
                 };
 
                 FileResultItems.Reset(Enumerable.Empty<FileSearchResult>());
@@ -658,7 +688,7 @@ namespace rg_gui
             try
             {
                 var allLines = new List<ResultLine>();
-                foreach (var lineResult in m_ripGrepWrapper.FileResults)
+                foreach (var lineResult in m_ripGrepWrapper.FileResults.OrderBy(x => x.Key.path).ThenBy(x => x.Key.filename).ThenBy(x => x.Key.lineNumber))
                 {
                     allLines.Add(new ResultLine(
                         lineResult.Key.lineNumber,

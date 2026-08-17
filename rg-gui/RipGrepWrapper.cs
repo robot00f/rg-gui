@@ -54,6 +54,8 @@ namespace rg_gui
             public int MaxFileSize { get; set; }
 
             public MaxFileSizeUnit MaxFileSizeUnit { get; set; } = MaxFileSizeUnit.None;
+
+            public int ContextLines { get; set; } = 0;
         }
 
         public class LineResult
@@ -315,6 +317,13 @@ namespace rg_gui
                         args.Add($"{searchParameters.MaxFileSize}{(searchParameters.MaxFileSizeUnit != MaxFileSizeUnit.B ? searchParameters.MaxFileSizeUnit : string.Empty)}");
                     }
 
+                    if (searchParameters.ContextLines > 0)
+                    {
+                        args.Add($"-A{searchParameters.ContextLines}");
+                        args.Add($"--field-context-separator={fieldMatchSeparator}");
+                        args.Add("--no-context-separator");
+                    }
+
                     foreach (var term in terms)
                     {
                         args.Add("-e");
@@ -377,7 +386,6 @@ namespace rg_gui
                                 if (result.Length == 3 &&
                                     !string.IsNullOrWhiteSpace(result[0]) &&
                                     !string.IsNullOrWhiteSpace(result[1]) &&
-                                    !string.IsNullOrWhiteSpace(result[2]) &&
                                     int.TryParse(RemoveAnsiColors(result[1]), out int lineNumber)
                                     )
                                 {
@@ -397,50 +405,48 @@ namespace rg_gui
                                             if (termMatchesForThisTerm.Count > 0)
                                             {
                                                 termMatches.AddRange(termMatchesForThisTerm);
-                                                if (!FilesFound.Contains((path, filename, t)))
-                                                {
-                                                    // Intentionally empty: tracked inside lock (FilesFound) below
-                                                }
                                             }
                                         }
 
-                                        if (termMatches.Count > 0)
+                                        // Track file discovery and matches
+                                        bool isFirstDiscovery = false;
+                                        lock (FilesFound)
                                         {
-                                            // Trigger file found event once per unique file
-                                            bool isFirstDiscovery = false;
-                                            lock (FilesFound)
+                                            if (!FilesFound.Any(x => x.path == path && x.filename == filename))
                                             {
-                                                if (!FilesFound.Any(x => x.path == path && x.filename == filename))
-                                                {
-                                                    isFirstDiscovery = true;
-                                                }
-
-                                                foreach (var termMatch in termMatches)
-                                                {
-                                                    if (!FilesFound.Contains((path, filename, termMatch.TermIndex)))
-                                                    {
-                                                        FilesFound.Add((path, filename, termMatch.TermIndex));
-                                                    }
-                                                }
-                                            }
-
-                                            if (isFirstDiscovery)
-                                            {
-                                                RaiseFileFound(path, filename);
-                                            }
-
-                                            if (!FileResults.ContainsKey((path, filename, lineNumber)))
-                                            {
-                                                FileResults.GetOrAdd((path, filename, lineNumber), new LineResult(cleanLineContent));
+                                                isFirstDiscovery = true;
                                             }
 
                                             foreach (var termMatch in termMatches)
                                             {
-                                                FileResults[(path, filename, lineNumber)].TermResults.Add(termMatch);
+                                                if (!FilesFound.Contains((path, filename, termMatch.TermIndex)))
+                                                {
+                                                    FilesFound.Add((path, filename, termMatch.TermIndex));
+                                                }
                                             }
 
-                                            RaiseLineFound(path, filename, lineNumber, cleanLineContent, termMatches);
+                                            if (isFirstDiscovery && termMatches.Count == 0)
+                                            {
+                                                FilesFound.Add((path, filename, 0));
+                                            }
                                         }
+
+                                        if (isFirstDiscovery)
+                                        {
+                                            RaiseFileFound(path, filename);
+                                        }
+
+                                        if (!FileResults.ContainsKey((path, filename, lineNumber)))
+                                        {
+                                            FileResults.GetOrAdd((path, filename, lineNumber), new LineResult(cleanLineContent));
+                                        }
+
+                                        foreach (var termMatch in termMatches)
+                                        {
+                                            FileResults[(path, filename, lineNumber)].TermResults.Add(termMatch);
+                                        }
+
+                                        RaiseLineFound(path, filename, lineNumber, cleanLineContent, termMatches);
                                     }
                                 }
                             }
